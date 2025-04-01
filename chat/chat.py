@@ -1,5 +1,6 @@
 import os
 import gradio as gr
+import requests
 from dotenv import load_dotenv
 from openai import OpenAI
 
@@ -67,6 +68,29 @@ def custom_api_response(message, history):
     return f"API Customizada (será implementada): {message}"
 
 
+def rag_chat_response(message, history):
+    try:
+        response = requests.post(
+            "http://localhost:8000/query",
+            json={"query": message}
+        )
+
+        if response.status_code == 200:
+            data = response.json()
+            answer = data["answer"]
+            sources = data["sources"]
+
+            # Formatar resposta com as fontes
+            full_response = f"{answer}\n\nFontes:\n" + \
+                "\n".join([f"- {s}" for s in sources])
+            return full_response
+        else:
+            return f"Erro na API: {response.status_code}"
+
+    except Exception as e:
+        return f"Erro ao conectar com a API: {str(e)}"
+
+
 # Criando a interface Gradio
 with gr.Blocks() as demo:
     gr.Markdown("# Sistema de consulta de dados CID")
@@ -84,19 +108,41 @@ with gr.Blocks() as demo:
         )
 
     with gr.Tab("Chat RAG - IMBEL/CEITEC/TELEBRAS"):
-        custom_chatbot = gr.ChatInterface(
-            custom_api_response,
-            # Adicionado type='messages'
+        rag_chatbot = gr.ChatInterface(
+            rag_chat_response,
             chatbot=gr.Chatbot(height=400, type='messages'),
             textbox=gr.Textbox(
-                placeholder="Digite sua mensagem aqui...", container=False),
+                placeholder="Digite sua pergunta sobre IMBEL/CEITEC/TELEBRAS...",
+                container=False
+            ),
             title="Chat RAG - IMBEL/CEITEC/TELEBRAS",
-            type='messages'  # Adicionando o tipo explicitamente
+            type='messages'
         )
+
+    # Remove ou comente a antiga implementação do custom_chatbot
 
 if __name__ == "__main__":
     try:
-        demo.launch(share=False, server_name="0.0.0.0", server_port=8520)
+        # Tentar portas alternativas se a 8520 estiver em uso
+        ports = [8520, 8521, 8522, 8523, 8524]
+
+        for port in ports:
+            try:
+                print(f"Tentando iniciar o servidor na porta {port}...")
+                demo.launch(
+                    share=False,
+                    server_name="0.0.0.0",
+                    server_port=port,
+                    show_error=True
+                )
+                break  # Se chegou aqui, o servidor iniciou com sucesso
+            except OSError as e:
+                if port == ports[-1]:  # Se for a última porta da lista
+                    raise OSError(
+                        f"Não foi possível encontrar uma porta disponível entre {ports[0]} e {ports[-1]}")
+                print(f"Porta {port} em uso, tentando próxima porta...")
+                continue
+
     except Exception as e:
         print(f"Erro ao iniciar o servidor: {str(e)}")
         raise
