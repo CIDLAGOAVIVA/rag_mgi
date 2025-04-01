@@ -13,6 +13,7 @@ client = OpenAI(
     api_key=DEEPSEEK_API_KEY
 )
 
+
 def deepseek_response(message, history):
     try:
         # Iniciar com a mensagem do sistema
@@ -28,7 +29,7 @@ def deepseek_response(message, history):
                 5. Use o contexto das mensagens anteriores para manter a coerência"""
             }
         ]
-        
+
         # Processar histórico mantendo a ordem cronológica
         if history:
             for msg in history:
@@ -37,13 +38,14 @@ def deepseek_response(message, history):
                 else:  # Formato antigo (tuplas)
                     user_msg, assistant_msg = msg
                     messages.append({"role": "user", "content": user_msg})
-                    messages.append({"role": "assistant", "content": assistant_msg})
-        
+                    messages.append(
+                        {"role": "assistant", "content": assistant_msg})
+
         # Adicionar nova mensagem
         messages.append({"role": "user", "content": message})
-        
+
         print(f"Contexto atual: {len(messages)} mensagens")  # Debug
-        
+
         response = client.chat.completions.create(
             model="deepseek-chat",
             messages=messages,
@@ -51,47 +53,55 @@ def deepseek_response(message, history):
             max_tokens=2000,
             stream=False
         )
-        
+
         return response.choices[0].message.content
 
     except Exception as e:
         print(f"Erro detalhado: {str(e)}")  # Debug
         return f"Erro ao processar a requisição: {str(e)}"
 
+
 def custom_api_response(message, history):
     # Aqui iremos implementar a chamada à nossa API customizada
     # Por enquanto, retornamos uma mensagem de placeholder
     return f"API Customizada (será implementada): {message}"
 
+
 # Criando a interface Gradio
 with gr.Blocks() as demo:
     gr.Markdown("# Sistema de consulta de dados CID")
     gr.Markdown("## Chatbot DeepSeek e RAG - MGI")
-    
+
     with gr.Tab("Chat DeepSeek"):
         deepseek_chatbot = gr.ChatInterface(
             deepseek_response,
-            chatbot=gr.Chatbot(height=400, type='messages'),  # Adicionado type='messages'
-            textbox=gr.Textbox(placeholder="Digite sua mensagem aqui...", container=False),
+            # Adicionado type='messages'
+            chatbot=gr.Chatbot(height=400, type='messages'),
+            textbox=gr.Textbox(
+                placeholder="Digite sua mensagem aqui...", container=False),
             title="Chat DeepSeek",
+            type='messages'  # Adicionando o tipo explicitamente
         )
-    
+
     with gr.Tab("Chat RAG - IMBEL/CEITEC/TELEBRAS"):
         custom_chatbot = gr.ChatInterface(
             custom_api_response,
-            chatbot=gr.Chatbot(height=400, type='messages'),  # Adicionado type='messages'
-            textbox=gr.Textbox(placeholder="Digite sua mensagem aqui...", container=False),
+            # Adicionado type='messages'
+            chatbot=gr.Chatbot(height=400, type='messages'),
+            textbox=gr.Textbox(
+                placeholder="Digite sua mensagem aqui...", container=False),
             title="Chat RAG - IMBEL/CEITEC/TELEBRAS",
+            type='messages'  # Adicionando o tipo explicitamente
         )
 
 if __name__ == "__main__":
     # Tenta diferentes portas se a 7860 estiver ocupada
-    for port in range(7860, 7870):
+    for port in range(8510, 8550):
         try:
             demo.launch(share=False, server_name="0.0.0.0", server_port=port)
             break
         except OSError:
-            if port == 7869:  # Última tentativa
+            if port == 8525:  # Última tentativa
                 print("Não foi possível encontrar uma porta disponível entre 7860-7869")
                 raise
             continue
