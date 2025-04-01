@@ -15,6 +15,7 @@ client = OpenAI(
 
 def deepseek_response(message, history):
     try:
+        # Iniciar com a mensagem do sistema
         messages = [
             {
                 "role": "system",
@@ -23,24 +24,25 @@ def deepseek_response(message, history):
                 1. SEMPRE responda em português do Brasil
                 2. Mesmo que a pergunta seja em outro idioma, responda em português
                 3. Nunca responda no idioma da pergunta se não for português
-                4. Mantenha suas respostas claras e diretas"""
+                4. Mantenha suas respostas claras e diretas
+                5. Use o contexto das mensagens anteriores para manter a coerência"""
             }
         ]
         
-        # Novo formato para processar o histórico
+        # Processar histórico mantendo a ordem cronológica
         if history:
             for msg in history:
-                # Cada mensagem agora é um dicionário com 'role' e 'content'
-                messages.append({
-                    "role": msg["role"],
-                    "content": msg["content"]
-                })
+                if isinstance(msg, dict):  # Novo formato (type='messages')
+                    messages.append(msg)
+                else:  # Formato antigo (tuplas)
+                    user_msg, assistant_msg = msg
+                    messages.append({"role": "user", "content": user_msg})
+                    messages.append({"role": "assistant", "content": assistant_msg})
         
-        # Adicionar a mensagem atual
-        messages.append({
-            "role": "user",
-            "content": f"{message}\n[RESPONDA EM PORTUGUÊS DO BRASIL]"
-        })
+        # Adicionar nova mensagem
+        messages.append({"role": "user", "content": message})
+        
+        print(f"Contexto atual: {len(messages)} mensagens")  # Debug
         
         response = client.chat.completions.create(
             model="deepseek-chat",
@@ -53,6 +55,7 @@ def deepseek_response(message, history):
         return response.choices[0].message.content
 
     except Exception as e:
+        print(f"Erro detalhado: {str(e)}")  # Debug
         return f"Erro ao processar a requisição: {str(e)}"
 
 def custom_api_response(message, history):
@@ -73,12 +76,12 @@ with gr.Blocks() as demo:
             title="Chat DeepSeek",
         )
     
-    with gr.Tab("Chat API Customizada"):
+    with gr.Tab("Chat RAG - IMBEL/CEITEC/TELEBRAS"):
         custom_chatbot = gr.ChatInterface(
             custom_api_response,
             chatbot=gr.Chatbot(height=400, type='messages'),  # Adicionado type='messages'
             textbox=gr.Textbox(placeholder="Digite sua mensagem aqui...", container=False),
-            title="Chat API Customizada",
+            title="Chat RAG - IMBEL/CEITEC/TELEBRAS",
         )
 
 if __name__ == "__main__":
