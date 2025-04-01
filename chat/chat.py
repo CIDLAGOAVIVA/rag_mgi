@@ -95,13 +95,8 @@ with gr.Blocks() as demo:
         )
 
 if __name__ == "__main__":
-    # Tenta diferentes portas se a 7860 estiver ocupada
-    for port in range(8510, 8550):
-        try:
-            demo.launch(share=False, server_name="0.0.0.0", server_port=port)
-            break
-        except OSError:
-            if port == 8525:  # Última tentativa
-                print("Não foi possível encontrar uma porta disponível entre 7860-7869")
-                raise
-            continue
+    try:
+        demo.launch(share=False, server_name="0.0.0.0", server_port=8520)
+    except Exception as e:
+        print(f"Erro ao iniciar o servidor: {str(e)}")
+        raise
