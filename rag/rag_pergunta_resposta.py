@@ -20,13 +20,16 @@ if "DEEPSEEK_API_KEY" not in os.environ:
     print("Erro: Chave de API do DeepSeek não encontrada no arquivo .env")
     sys.exit(1)
 
+# Definir o caminho base do projeto 
+base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+data_path = os.path.join(base_path, 'data')
 
 class RAGSystem:
     def __init__(self):
         try:
             # Carregando documentos da pasta selecionada
             print("Carregando documentos...")
-            loader = DirectoryLoader('./data/', glob="**/*.md", loader_cls=lambda file_path: TextLoader(
+            loader = DirectoryLoader(data_path, glob="**/*.md", loader_cls=lambda file_path: TextLoader(
                 file_path, encoding='utf-8'), show_progress=True)
             documentos = loader.load()
             print(f"Carregados {len(documentos)} documentos")
@@ -57,13 +60,25 @@ class RAGSystem:
                 )
                 vectorstore.persist()
 
-            # Configure o retrievador
-            retriever = vectorstore.as_retriever(search_kwargs={"k": 4})
+            #  Configure o retrievador usando MMR para buscar documentos relevantes e diversos
+            retriever = vectorstore.as_retriever(
+                search_type="mmr",  # Maximum Marginal Relevance
+                search_kwargs={
+                    "k": 8,
+                    "fetch_k": 20,  # Busca mais documentos inicialmente
+                    "lambda_mult": 0.7,  # Equilíbrio entre relevância e diversidade
+                }
+            )
 
             # Template de prompt personalizado para melhorar as respostas
             template = """
             Use as informações a seguir para responder à pergunta do usuário.
-            Se você não sabe a resposta, apenas diga que não sabe, não tente inventar uma resposta.
+            Seja detalhista e claro em sua resposta, utilizando as informações contidas nos documentos.
+            Quando falar genericamente "empresas", considere somente: IMBEL, CEITEC e Telebras.
+            Se a pergunta estiver relacionada a dados financeiros, balanços ou ativos, 
+            priorize informações de relatórios financeiros, DFPs e balanços patrimoniais.
+            Forneça dados numéricos específicos quando disponíveis.
+            Se você não sabe a resposta, apenas diga que não sabe, não tente inventar uma resposta, mas também não diga que não sabe para tudo.
             
             Contexto: {context}
             

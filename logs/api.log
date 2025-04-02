@@ -1,18 +1,21 @@
 Carregando documentos...
-  0%|          | 0/95 [00:00<?, ?it/s]100%|██████████| 95/95 [00:00<00:00, 4808.53it/s]
-/home/marcus/desenvolvimento/rag_mgi/api/rag_api.py:56: LangChainDeprecationWarning: The class `HuggingFaceEmbeddings` was deprecated in LangChain 0.2.2 and will be removed in 1.0. An updated version of the class exists in the :class:`~langchain-huggingface package and should be used instead. To use it run `pip install -U :class:`~langchain-huggingface` and import as `from :class:`~langchain_huggingface import HuggingFaceEmbeddings``.
+  0%|          | 0/99 [00:00<?, ?it/s]100%|██████████| 99/99 [00:00<00:00, 4184.24it/s]
+/home/leomcamilo/projects/rag_mgi/api/rag_api.py:56: LangChainDeprecationWarning: The class `HuggingFaceEmbeddings` was deprecated in LangChain 0.2.2 and will be removed in 1.0. An updated version of the class exists in the :class:`~langchain-huggingface package and should be used instead. To use it run `pip install -U :class:`~langchain-huggingface` and import as `from :class:`~langchain_huggingface import HuggingFaceEmbeddings``.
   embeddings = HuggingFaceEmbeddings(
-/home/marcus/desenvolvimento/rag_mgi/api/rag_api.py:58: LangChainDeprecationWarning: The class `Chroma` was deprecated in LangChain 0.2.9 and will be removed in 1.0. An updated version of the class exists in the :class:`~langchain-chroma package and should be used instead. To use it run `pip install -U :class:`~langchain-chroma` and import as `from :class:`~langchain_chroma import Chroma``.
+/home/leomcamilo/projects/rag_mgi/api/rag_api.py:58: LangChainDeprecationWarning: The class `Chroma` was deprecated in LangChain 0.2.9 and will be removed in 1.0. An updated version of the class exists in the :class:`~langchain-chroma package and should be used instead. To use it run `pip install -U :class:`~langchain-chroma` and import as `from :class:`~langchain_chroma import Chroma``.
   vectorstore = Chroma(persist_directory="./chroma_db",
-INFO:     Started server process [1592883]
+INFO:     Started server process [1961602]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
-ERROR:    [Errno 98] error while attempting to bind on address ('0.0.0.0', 8000): address already in use
-INFO:     Waiting for application shutdown.
-INFO:     Application shutdown complete.
-Carregados 95 documentos
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+/home/leomcamilo/projects/rag_mgi/api/rag_api.py:120: LangChainDeprecationWarning: The method `Chain.__call__` was deprecated in langchain 0.1.0 and will be removed in 1.0. Use :meth:`~invoke` instead.
+  response = rag_chain({"query": request.query})
+Carregados 99 documentos
 Dividindo documentos em chunks...
-Criados 11633 chunks
+Criados 13417 chunks
 Carregando base de dados vetorial existente...
 Iniciando servidor RAG API...
 Acesse a documentação em: http://localhost:8000/docs
+INFO:     127.0.0.1:43866 - "POST /query HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40042 - "POST /query HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55250 - "POST /query HTTP/1.1" 200 OK
