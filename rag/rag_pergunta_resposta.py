@@ -37,7 +37,7 @@ class RAGSystem:
             # Dividindo em chunks
             print("Dividindo documentos em chunks...")
             text_splitter = RecursiveCharacterTextSplitter(
-                chunk_size=1000, chunk_overlap=200)
+                chunk_size=1500, chunk_overlap=400)
             chunks = text_splitter.split_documents(documentos)
             print(f"Criados {len(chunks)} chunks")
 
@@ -65,20 +65,21 @@ class RAGSystem:
                 search_type="mmr",  # Maximum Marginal Relevance
                 search_kwargs={
                     "k": 8,
-                    "fetch_k": 20,  # Busca mais documentos inicialmente
-                    "lambda_mult": 0.7,  # Equilíbrio entre relevância e diversidade
+                    "fetch_k": 30,  # Busca mais documentos inicialmente
+                    "lambda_mult": 0.6,  # Equilíbrio entre relevância e diversidade
                 }
             )
 
             # Template de prompt personalizado para melhorar as respostas
             template = """
-            Use as informações a seguir para responder à pergunta do usuário.
-            Seja detalhista e claro em sua resposta, utilizando as informações contidas nos documentos.
-            Quando falar genericamente "empresas", considere somente: IMBEL, CEITEC e Telebras.
-            Se a pergunta estiver relacionada a dados financeiros, balanços ou ativos, 
-            priorize informações de relatórios financeiros, DFPs e balanços patrimoniais.
-            Forneça dados numéricos específicos quando disponíveis.
-            Se você não sabe a resposta, apenas diga que não sabe, não tente inventar uma resposta, mas também não diga que não sabe para tudo.
+            Você é um especialista em analisar e extrair informações de documentos acadêmicos e técnicos, principalmente dados administrativos e financeiros.
+
+            INSTRUÇÕES:
+            1. Use principalmente as informações fornecidas na FONTE para responder à pergunta.
+            2. Seja detalhado e preciso em sua resposta, mantendo um tom neutro e objetivo.
+            3. Cite informações específicas dos documentos, incluindo números, datas e fatos quando disponíveis.
+            4. Quando documentos apresentarem diferentes perspectivas sobre o mesmo assunto, mencione essas diferentes visões.
+            5. Se a informação não estiver explicitamente disponível na fonte, indique quais partes do contexto são relevantes para a pergunta, mesmo que incompletas.
             
             Contexto: {context}
             
@@ -98,7 +99,7 @@ class RAGSystem:
                 temperature=0,
                 max_tokens=None,
                 timeout=None,
-                max_retries=2,
+                max_retries=3,
             )
 
             # Configure a chain RAG

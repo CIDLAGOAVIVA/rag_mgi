@@ -1,21 +1,18 @@
 Carregando documentos...
-  0%|          | 0/99 [00:00<?, ?it/s]100%|██████████| 99/99 [00:00<00:00, 4184.24it/s]
+  0%|          | 0/5824 [00:00<?, ?it/s] 26%|██▌       | 1500/5824 [00:00<00:00, 14918.63it/s] 53%|█████▎    | 3064/5824 [00:00<00:00, 15338.98it/s] 80%|████████  | 4662/5824 [00:00<00:00, 15629.99it/s]100%|██████████| 5824/5824 [00:00<00:00, 15319.86it/s]
 /home/leomcamilo/projects/rag_mgi/api/rag_api.py:56: LangChainDeprecationWarning: The class `HuggingFaceEmbeddings` was deprecated in LangChain 0.2.2 and will be removed in 1.0. An updated version of the class exists in the :class:`~langchain-huggingface package and should be used instead. To use it run `pip install -U :class:`~langchain-huggingface` and import as `from :class:`~langchain_huggingface import HuggingFaceEmbeddings``.
   embeddings = HuggingFaceEmbeddings(
 /home/leomcamilo/projects/rag_mgi/api/rag_api.py:58: LangChainDeprecationWarning: The class `Chroma` was deprecated in LangChain 0.2.9 and will be removed in 1.0. An updated version of the class exists in the :class:`~langchain-chroma package and should be used instead. To use it run `pip install -U :class:`~langchain-chroma` and import as `from :class:`~langchain_chroma import Chroma``.
   vectorstore = Chroma(persist_directory="./chroma_db",
-INFO:     Started server process [1961602]
+INFO:     Started server process [3139790]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
-INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
-/home/leomcamilo/projects/rag_mgi/api/rag_api.py:120: LangChainDeprecationWarning: The method `Chain.__call__` was deprecated in langchain 0.1.0 and will be removed in 1.0. Use :meth:`~invoke` instead.
-  response = rag_chain({"query": request.query})
-Carregados 99 documentos
+ERROR:    [Errno 98] error while attempting to bind on address ('0.0.0.0', 8000): address already in use
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+Carregados 5824 documentos
 Dividindo documentos em chunks...
-Criados 13417 chunks
+Criados 167456 chunks
 Carregando base de dados vetorial existente...
 Iniciando servidor RAG API...
 Acesse a documentação em: http://localhost:8000/docs
-INFO:     127.0.0.1:43866 - "POST /query HTTP/1.1" 200 OK
-INFO:     127.0.0.1:40042 - "POST /query HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55250 - "POST /query HTTP/1.1" 200 OK
