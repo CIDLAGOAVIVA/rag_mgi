@@ -114,7 +114,7 @@ try:
 
     # Configure o modelo de linguagem
     llm = ChatDeepSeek(
-        model="deepseek-chat",
+        model="deepseek-reasoner",
         temperature=0,
         max_tokens=None,
         timeout=None,
