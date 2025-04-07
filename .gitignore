@@ -10,7 +10,8 @@ data/
 # Virtual environments
 .venv
 .env
-nohup.out
-log
+*nohup.out
+*.log
 chat.pid
 api.pid
+*.md
