@@ -1,0 +1,36 @@
+# Título: Lagging Production of Machine Tools and Parts Plagues Russian Military-Industrial Complex - The Jamestown Foundation
+
+>Data: 2023-12-04 05:00:00-03:00
+>Tipo: Notícias
+>URL: https://jamestown.org/program/lagging-production-of-machine-tools-and-parts-plagues-russian-military-industrial-complex/
+>Origem: [The Jamestown Foundation](https://jamestown.org)
+>Idioma: en
+>Agregador: GNews
+
+### Conteúdo:
+
+Russia has consistently spread dubious claims that defense production remains on track to achieve Moscow’s increased targets in providing increased support for the Russian war effort in Ukraine (see EDM, September 21, October 5, October 31). The Russian military-industrial complex as a whole depends heavily on imported industrial equipment from Germany, France, Japan, Taiwan, Italy, Sweden, South Korea, and the United States. The more sophisticated and advanced a weapon system, the more its production depends on imported industrial equipment. Throughout the 2000s and 2010s, Russia consistently purchased equipment from, among others, Siemens, Fanuc, Mycronic, Akira Seiki, Mazatrol, and Delta Electronics. Since Moscow’s invasion of Ukraine in 2022 and subsequent Western sanctions, the Kremlin’s ability to source critical parts for defense production from traditional sources has been severely curtailed. As a result, Russia has increasingly turned to alternative sources for critical machine parts and tools in hoping to shore up growing deficits.
+
+Russia’s war against Ukraine has led to a steady increase in imported machine tools. In 2022, the share of imported machine tools in the heavy machine-building industry, which includes arms manufacturing, was between 60 and 80 percent, and the share for domestic manufacturing of machine tools exceeded 90 percent (Kommersant, June 16, 2022). In 2023, the share of imported machine tools in all Russian industries was estimated between 75 and 92 percent (Rossiyskaya gazeta, April 12; Mashnews.ru, August 23). Machine tool imports from China, 43.25 percent in 2022 compared to 11 percent in 2021, and Taiwan, 15.45 percent in 2022 compared to about 10 percent in 2021, have grown significantly. These imports, however, cannot wholly replace the advanced industrial equipment previously imported from the United States, Europe, and Japan. Moreover, Russia’s total imports of metal-working machine tools were 11,433 units valued at $816.8 million in 2021 and decreased to 9,074 units valued at $574.1 million in 2022 (Mashnews.ru, May 24). Western sanctions have been focused on further preventing Russia’s access to advanced industrial equipment (including electric engine parts), software, and special coolants.
+
+Without these supplies, the current spectrum of Russia’s advanced military research and development programs and arms production would be impossible to maintain. Those Russian entities that produce advanced industrial equipment—including Mekhanika Holding, STAN, Kovrov Electromechanical Plant, and Perm Metalworking Tools—are dependent on command-and-control systems, electric engines, and other key components previously supplied by American, European, and Asian companies. Efforts to ameliorate production issues through reverse-engineering Western machine tools have struggled due to a serious deficit of human capital and necessary technologies (Stan-company.ru, accessed November 30, 2023; Rostec.ru, November 27).
+
+The domestic production of advanced machine tools in Russia is growing, though it is still not enough to wholly substitute for imported industrial equipment. For example, the growing production rate of CNS lathes for metalwork (critical for machinery used in arms production) is explained by the low base effect after a dramatic fall in production between 2018 and 2020:
+
+Number of CNC Lathes Produced in Russia in 2017–2023 (12 Months) and Between January and September 2017–2023 (9 Months)
+
+2017 2018 2019 2020 2021 2022 2023 CNC Lathes (9 Months // 12 Months) 432 // 650 344 // 497 318 // 449 307 // 447 388 // 563 408 // 606 562 // –
+
+A similar trend is noticeable with United Aircraft Corporation (UAC), a subsidiary of Rostec. In 2022, the company ordered 300 units of machine tools from Mekhanika Holding, another subsidiary of Rostec, to be delivered by 2026. These machine tools will reportedly be used to replace aging industrial equipment. However, from 2019 to 2021, Mekhanika Holding supplied only 50 units to UAC and did not have the proper manufacturing facilities to complete such a contract (Rostec.ru, May 27, 2022; Business-gazeta.ru, August 5, 2022). As a result, Mekhanika holding will likely struggle to meet the terms of the 2022 contract on time, if at all. Russia’s deficit of advanced industrial equipment cannot be solved in its entirety if Western sanctions remain in place and if smuggling supply chains continue to regularly break down.
+
+The industrial equipment Russia purchased before 2022 still works, but its lifetime is limited. For example, the degree of wear-and-tear on advanced equipment for industries related to arms production has been growing steadily in recent years (Rosstat.gov.ru, accessed November 30, 2023):
+
+Wear-and-Tear of Advanced Equipment in Industries Related to Arms Production in Percentages, 2018–2022
+
+2018 2019 2020 2021 2022 Chemical Materials and Products 57 54.5 52.2 54 48.7 Computers and Electronic and Optical Devices 55.2 53.5 63.2 62 58.9 Fabricated Metal Products, Except Machinery and Equipment (Artillery Shells) 53.6 54.4 56.1 56.7 52.8 Other Transportation Vehicles and Equipment (Tanks, Armored Vehicles, Aircraft, etc.) 59.2 58.8 61 58.1 56.5
+
+The overall wear on advanced industrial equipment is far from disastrous, but in the face of Western sanctions, the trend looks increasingly irreversible. Even the supposed improvement of this metric in 2022 was made mostly on paper and partly based on different calculations. These statistics highlight fears that the Russian military-industrial complex will slowly lose its manufacturing capacity and competencies in the coming years.
+
+Russia may try to maintain at least some access to advanced industrial equipment in the West by finding new ways to circumvent sanctions or replace that supply with lower-quality equipment from China and North Korea (see EDM, August 1; see China Brief, August 18). Even so, competition will be fierce among state-owned corporations for access to limited technical equipment and qualified personnel. That means Russia would need to decrease the number and scale of its arms programs in the coming years to mitigate these problems, though the Kremlin has no intention of doing so.
+
+The Russian military-industrial complex was only relatively effective when it relied on global supply chains. Today, research and development and arms production programs have run into serious problems without access to critical Western technologies. The ongoing adaptation of Russian defense manufacturing to this new reality will likely result in simplified research programs, further delays in the serial production of advanced weapon systems, and decreased production rates. The high rate of fire and heavy losses on the Ukrainian front will serve to further compound these problems for Moscow.

@@ -1,0 +1,20 @@
+# Título: The European Union: from peace to security project. 240 billion spent on defense in 2022 - Eunews
+
+>Data: 2023-11-30 05:00:00-03:00
+>Tipo: Notícias
+>URL: https://www.eunews.it/en/2023/11/30/lunione-europea-da-progetto-di-pace-a-progetto-di-sicurezza-nel-2022-spesi-240-miliardi-per-la-difesa/
+>Origem: [Eunews](https://www.eunews.it)
+>Idioma: en
+>Agregador: GNews
+
+### Conteúdo:
+
+Brussels – With Russia’s invasion of Ukraine, the military integration taboo in the EU’s peace project has begun to waver, in the name of what the President of the European Commission, Ursula von der Leyen, has called “strategic responsibility”. More than a year and a half after the start of the conflict, the taboo now seems to have fallen: in 2022, the EU countries spent a record 240 billion euros on defense, and in 2023, it is already over 270 billion.
+
+Data published in the annual report of the European European Defense Agency (EDA) data from its annual report clearly shows a 6 percent increase in military spending compared to 2021, confirming a trend that has actually been going on for eight years. Out of 27 member countries, 20 have increased their share, some dramatically. The countries that stand out are Sweden (+30.1 percent), Luxembourg and Lithuania (+27 percent), but also Spain (+19 percent), Belgium (+14.8 percent) and Greece (+13.3 percent). Even more significant is the increase in the number of projects managed on behalf of the Member States by EDA, which mark the horizon of common defense: there are now 46 of them, with a total value of EUR 250 million.
+
+EU foreign policy heavyweights Ursula von der Leyen, Charles Michel, and the head of European diplomacy, Josep Borrell, took part in the EDA conference today (20 November). “We always say that our Union was born as a peace project, but peace requires security. And that is why our Union was also born as a security project,” said the President of the European Commission. Von der Leyen’s change of perspective is already a reality: For the first time, Brussels has provided military aid to a country at war, “5.6 billion euros coordinated at EU level for tanks, helicopters, air defense systems, missiles and ammunition to Ukraine”. It also passed a law, the Act in Support of Ammunition Production (ASAP), which aims to produce one million munitions per year. Probably from next year, while this year 480,000 artillery rounds have “already been delivered or are in the pipeline.”
+
+And so it is “good news” that many EU countries have recently increased their national defense budgets because “there is much more room for the necessary investments.” But more can be done because the collaborative spending of member states has “improved only slightly” and because “we mostly buy ourselves and buy abroad.” According to von der Leyen, the EU needs joint programming to identify capacities and projects on which to focus resources at the European level. And it needs “simpler and more efficient rules” because the defense is, after all, a highly regulated sector. Von der Leyen announced that the Commission would propose a “European program for the defense industry early next year.” A program to explore all possible ways to “reward, incentivize, and compensate for the costs of industrial cooperation and competitiveness.”
+
+Before von der Leyen, European Council President Charles Michel had already left no room for doubt: “We must fortify our European continent,” he told the audience at EDA. Michel proudly listed the taboos that had been broken since Russia invaded Ukraine: “jointly procuring military equipment, using the EU budget to support the increase of our military production and financing joint defense research and development”. And “all this without changing the treaties.” Citing the figures from the Agency’s report, Michel pointed out that last year a quarter of total defense spending – almost 60 billion euros – had been channeled into investments: “This means that we can invest at least 600 billion euros over the next 10 years, with 600 billion euros we can do great things,’ he concluded.

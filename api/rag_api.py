@@ -4,12 +4,15 @@ import os
 import dotenv
 from dotenv import load_dotenv
 from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import Chroma
+from langchain_chroma import Chroma
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_deepseek import ChatDeepSeek
 from langchain.chains import RetrievalQA
 from langchain_community.document_loaders import TextLoader, DirectoryLoader
 from langchain.prompts import PromptTemplate
+from sentence_transformers import SentenceTransformer
 import sys
 import re
 from datetime import datetime
@@ -38,7 +41,7 @@ if "DEEPSEEK_API_KEY" not in os.environ:
 try:
     # Carregando documentos da pasta selecionada
     print("Carregando documentos...")
-    loader = DirectoryLoader('./data/', glob="**/*.md",
+    loader = DirectoryLoader('./data2/', glob="**/*.md",
                              loader_cls=lambda file_path: TextLoader(file_path, encoding='utf-8'), show_progress=True)
     documentos = loader.load()
     print(f"Carregados {len(documentos)} documentos")
@@ -46,22 +49,48 @@ try:
     # Dividindo em chunks
     print("Dividindo documentos em chunks...")
     text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=1500, chunk_overlap=222)
+        chunk_size=1500, chunk_overlap=240)
     chunks = text_splitter.split_documents(documentos)
     print(f"Criados {len(chunks)} chunks")
 
     # Verificar se já existe um banco de dados persistente
     if os.path.exists("./chroma_db") and os.path.isdir("./chroma_db"):
         print("Carregando base de dados vetorial existente...")
-        embeddings = HuggingFaceEmbeddings(
-            model_name="sentence-transformers/all-MiniLM-L6-v2")
+        from sentence_transformers import SentenceTransformer
+        
+        # Criar adaptador para SentenceTransformer compatível com LangChain
+        class SentenceTransformerEmbeddings:
+            def __init__(self, model_name):
+                self.model = SentenceTransformer(model_name)
+                
+            def embed_documents(self, texts):
+                return self.model.encode(texts)
+                
+            def embed_query(self, text):
+                return self.model.encode(text)
+        
+        # Criar instância do adaptador
+        embeddings = SentenceTransformerEmbeddings("intfloat/e5-mistral-7b-instruct")
         vectorstore = Chroma(persist_directory="./chroma_db",
                              embedding_function=embeddings)
     else:
         # Crie embeddings e armazene em uma base vetorial
         print("Criando nova base de dados vetorial...")
-        embeddings = HuggingFaceEmbeddings(
-            model_name="sentence-transformers/all-MiniLM-L6-v2")
+        from sentence_transformers import SentenceTransformer
+        
+        # Criar adaptador para SentenceTransformer compatível com LangChain
+        class SentenceTransformerEmbeddings:
+            def __init__(self, model_name):
+                self.model = SentenceTransformer(model_name)
+                
+            def embed_documents(self, texts):
+                return self.model.encode(texts)
+                
+            def embed_query(self, text):
+                return self.model.encode(text)
+        
+        # Criar instância do adaptador
+        embeddings = SentenceTransformerEmbeddings("intfloat/e5-mistral-7b-instruct")
         vectorstore = Chroma.from_documents(
             documents=chunks,
             embedding=embeddings,
@@ -115,7 +144,7 @@ try:
     # Configure o modelo de linguagem
     llm = ChatDeepSeek(
         model="deepseek-reasoner",
-        temperature=0,
+        temperature=0.1,
         max_tokens=None,
         timeout=None,
         max_retries=3,
@@ -152,8 +181,8 @@ try:
     if __name__ == "__main__":
         import uvicorn
         print("Iniciando servidor RAG API...")
-        print("Acesse a documentação em: http://localhost:8000/docs")
-        uvicorn.run(app, host="0.0.0.0", port=8000)
+        print("Acesse a documentação em: http://localhost:8009/docs")
+        uvicorn.run(app, host="0.0.0.0", port=8009)
 
 except Exception as e:
     print(f"Ocorreu um erro: {e}")
