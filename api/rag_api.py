@@ -19,6 +19,13 @@ from datetime import datetime
 from pydantic import BaseModel
 from typing import List
 
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+# Adicionar as importações necessárias para o agentic_chunker
+from processing.agentic_chunker import DeepSeekPropositionizer, AgenticChunker
+import uuid
+
 app = FastAPI()
 
 # Adicionar CORS middleware
@@ -33,6 +40,18 @@ app.add_middleware(
 # Carregar variáveis de ambiente
 load_dotenv()
 
+text = """
+Dense retrieval se tornou um método proeminente para obter contexto relevante ou conhecimento mundial em tarefas de PNL de domínio aberto. 
+Quando usamos um recuperador denso aprendido em um corpus de recuperação no momento da inferência, uma escolha de design frequentemente 
+negligenciada é a unidade de recuperação na qual o corpus é indexado, por exemplo, documento, passagem ou sentença. 
+Descobrimos que a escolha da unidade de recuperação impacta significativamente o desempenho das tarefas de recuperação e downstream. 
+Distinto da abordagem típica de usar passagens ou sentenças, introduzimos uma nova unidade de recuperação, proposição, para recuperação densa. 
+Proposições são definidas como expressões atômicas dentro do texto, cada uma encapsulando um factóide distinto e apresentada em um formato 
+de linguagem natural conciso e autocontido. Conduzimos uma comparação empírica de diferentes granularidades de recuperação. 
+Nossos experimentos revelam que indexar um corpus por unidades de granulação fina, como proposições, supera significativamente as unidades 
+de nível de passagem em tarefas de recuperação.
+"""
+
 # Verificar se a chave API está definida
 if "DEEPSEEK_API_KEY" not in os.environ:
     print("Erro: Chave de API do DeepSeek não encontrada no arquivo .env")
@@ -41,17 +60,51 @@ if "DEEPSEEK_API_KEY" not in os.environ:
 try:
     # Carregando documentos da pasta selecionada
     print("Carregando documentos...")
-    loader = DirectoryLoader('./data2/', glob="**/*.md",
+    loader = DirectoryLoader('./data2/processed', glob="**/*.md",
                              loader_cls=lambda file_path: TextLoader(file_path, encoding='utf-8'), show_progress=True)
     documentos = loader.load()
     print(f"Carregados {len(documentos)} documentos")
 
-    # Dividindo em chunks
-    print("Dividindo documentos em chunks...")
-    text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=1500, chunk_overlap=240)
-    chunks = text_splitter.split_documents(documentos)
-    print(f"Criados {len(chunks)} chunks")
+    # Convertendo documentos em proposições e chunks semânticos
+    print("Processando documentos e criando proposições...")
+    propositionizer = DeepSeekPropositionizer()
+    chunker = AgenticChunker(print_logging=False)
+    
+    chunks = []
+    for documento in documentos:
+        # Extrair proposições do texto
+        proposicoes = propositionizer.text_to_propositions(documento.page_content)
+        
+        # Adicionar proposições ao chunker
+        for proposicao in proposicoes:
+            chunker.add_proposition(proposicao)
+    
+    # Obter os chunks processados
+    chunk_dict = chunker.get_chunks(get_type='dict')
+    print(f"Criados {len(chunk_dict)} chunks semânticos")
+    
+    # Converter os chunks semanticamente agrupados para o formato Document do LangChain
+    from langchain_core.documents import Document
+    processed_chunks = []
+    
+    for chunk_id, chunk_data in chunk_dict.items():
+        # Juntar todas as proposições do chunk em um único texto
+        chunk_text = " ".join(chunk_data['propositions'])
+        
+        # Criar um novo Document com metadados enriquecidos
+        doc = Document(
+            page_content=chunk_text,
+            metadata={
+                'source': documento.metadata.get('source', 'unknown'),
+                'chunk_id': chunk_id,
+                'title': chunk_data['title'],
+                'summary': chunk_data['summary']
+            }
+        )
+        processed_chunks.append(doc)
+    
+    chunks = processed_chunks
+    print(f"Processados {len(chunks)} chunks para indexação")
 
     # Verificar se já existe um banco de dados persistente
     if os.path.exists("./chroma_db") and os.path.isdir("./chroma_db"):
@@ -181,8 +234,8 @@ try:
     if __name__ == "__main__":
         import uvicorn
         print("Iniciando servidor RAG API...")
-        print("Acesse a documentação em: http://localhost:8009/docs")
-        uvicorn.run(app, host="0.0.0.0", port=8009)
+        print("Acesse a documentação em: http://localhost:8008/docs")
+        uvicorn.run(app, host="0.0.0.0", port=8008)
 
 except Exception as e:
     print(f"Ocorreu um erro: {e}")
