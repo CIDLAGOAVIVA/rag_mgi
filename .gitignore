@@ -9,6 +9,9 @@ data2/
 *.egg-info
 chroma_db/
 *.md
+*.pickle
+*.sqlite3
+*.bin
 
 # Temporary files and directories
 apaga_duplicata_raw_processed.py
