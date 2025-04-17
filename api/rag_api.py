@@ -65,67 +65,86 @@ try:
     documentos = loader.load()
     print(f"Carregados {len(documentos)} documentos")
 
-    # Convertendo documentos em proposições e chunks semânticos
-    print("Processando documentos e criando proposições...")
-    propositionizer = DeepSeekPropositionizer()
-    chunker = AgenticChunker(print_logging=False)
+    ### -- PROCESSAMENTO DE DOCUMENTOS USANDO O AGENTIC_CHUNKER -- ###
+
+    # # Convertendo documentos em proposições e chunks semânticos
+    # print("Processando documentos e criando proposições...")
+    # propositionizer = DeepSeekPropositionizer()
+    # chunker = AgenticChunker(print_logging=False)
     
-    chunks = []
-    for documento in documentos:
-        # Extrair proposições do texto
-        proposicoes = propositionizer.text_to_propositions(documento.page_content)
+    # chunks = []
+    # for documento in documentos:
+    #     # Extrair proposições do texto
+    #     proposicoes = propositionizer.text_to_propositions(documento.page_content)
         
-        # Adicionar proposições ao chunker
-        for proposicao in proposicoes:
-            chunker.add_proposition(proposicao)
+    #     # Adicionar proposições ao chunker
+    #     for proposicao in proposicoes:
+    #         chunker.add_proposition(proposicao)
     
-    # Obter os chunks processados
-    chunk_dict = chunker.get_chunks(get_type='dict')
-    print(f"Criados {len(chunk_dict)} chunks semânticos")
+    # # Obter os chunks processados
+    # chunk_dict = chunker.get_chunks(get_type='dict')
+    # print(f"Criados {len(chunk_dict)} chunks semânticos")
     
-    # Converter os chunks semanticamente agrupados para o formato Document do LangChain
-    from langchain_core.documents import Document
-    processed_chunks = []
+    # # Converter os chunks semanticamente agrupados para o formato Document do LangChain
+    # from langchain_core.documents import Document
+    # processed_chunks = []
     
-    for chunk_id, chunk_data in chunk_dict.items():
-        # Juntar todas as proposições do chunk em um único texto
-        chunk_text = " ".join(chunk_data['propositions'])
+    # for chunk_id, chunk_data in chunk_dict.items():
+    #     # Juntar todas as proposições do chunk em um único texto
+    #     chunk_text = " ".join(chunk_data['propositions'])
         
-        # Criar um novo Document com metadados enriquecidos
-        doc = Document(
-            page_content=chunk_text,
-            metadata={
-                'source': documento.metadata.get('source', 'unknown'),
-                'chunk_id': chunk_id,
-                'title': chunk_data['title'],
-                'summary': chunk_data['summary']
-            }
-        )
-        processed_chunks.append(doc)
+    #     # Criar um novo Document com metadados enriquecidos
+    #     doc = Document(
+    #         page_content=chunk_text,
+    #         metadata={
+    #             'source': documento.metadata.get('source', 'unknown'),
+    #             'chunk_id': chunk_id,
+    #             'title': chunk_data['title'],
+    #             'summary': chunk_data['summary']
+    #         }
+    #     )
+    #     processed_chunks.append(doc)
     
-    chunks = processed_chunks
-    print(f"Processados {len(chunks)} chunks para indexação")
+    # chunks = processed_chunks
+    # print(f"Processados {len(chunks)} chunks para indexação")
+
+    # # Verificar se já existe um banco de dados persistente
+    # if os.path.exists("./chroma_db") and os.path.isdir("./chroma_db"):
+    #     print("Carregando base de dados vetorial existente...")
+    #     from sentence_transformers import SentenceTransformer
+        
+    #     # Criar adaptador para SentenceTransformer compatível com LangChain
+    #     class SentenceTransformerEmbeddings:
+    #         def __init__(self, model_name):
+    #             self.model = SentenceTransformer(model_name)
+                
+    #         def embed_documents(self, texts):
+    #             return self.model.encode(texts)
+                
+    #         def embed_query(self, text):
+    #             return self.model.encode(text)
+    
+    # # Criar instância do adaptador
+    # embeddings = SentenceTransformerEmbeddings("intfloat/e5-mistral-7b-instruct")
+    # vectorstore = Chroma(persist_directory="./chroma_db",
+    #                      embedding_function=embeddings)
+    
+    ### -- DIVISÃO MANUAL EM CHUNKS -- ###
+
+    print("Dividindo documentos em chunks...")
+    text_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=256, chunk_overlap=51)
+    chunks = text_splitter.split_documents(documentos)
+    print(f"Criados {len(chunks)} chunks")
 
     # Verificar se já existe um banco de dados persistente
     if os.path.exists("./chroma_db") and os.path.isdir("./chroma_db"):
         print("Carregando base de dados vetorial existente...")
-        from sentence_transformers import SentenceTransformer
-        
-        # Criar adaptador para SentenceTransformer compatível com LangChain
-        class SentenceTransformerEmbeddings:
-            def __init__(self, model_name):
-                self.model = SentenceTransformer(model_name)
-                
-            def embed_documents(self, texts):
-                return self.model.encode(texts)
-                
-            def embed_query(self, text):
-                return self.model.encode(text)
-        
-        # Criar instância do adaptador
-        embeddings = SentenceTransformerEmbeddings("intfloat/e5-mistral-7b-instruct")
+        embeddings = HuggingFaceEmbeddings(
+            model_name="sentence-transformers/all-MiniLM-L6-v2")
         vectorstore = Chroma(persist_directory="./chroma_db",
                              embedding_function=embeddings)
+        
     else:
         # Crie embeddings e armazene em uma base vetorial
         print("Criando nova base de dados vetorial...")
@@ -143,13 +162,12 @@ try:
                 return self.model.encode(text)
         
         # Criar instância do adaptador
-        embeddings = SentenceTransformerEmbeddings("intfloat/e5-mistral-7b-instruct")
+        embeddings = SentenceTransformerEmbeddings("sentence-transformers/all-MiniLM-L6-v2")
         vectorstore = Chroma.from_documents(
             documents=chunks,
             embedding=embeddings,
-            persist_directory="./chroma_db"
+            persist_directory="./chroma_db" # A persistência ocorre aqui
         )
-        vectorstore.persist()
 
     #  Configure o retrievador usando MMR para buscar documentos relevantes e diversos
     retriever = vectorstore.as_retriever(
@@ -198,7 +216,7 @@ try:
     llm = ChatDeepSeek(
         model="deepseek-reasoner",
         temperature=0.1,
-        max_tokens=None,
+        max_tokens=4096,
         timeout=None,
         max_retries=3,
     )

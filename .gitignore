@@ -5,7 +5,13 @@ build/
 dist/
 wheels/
 data/
+data2/
 *.egg-info
+chroma_db/
+
+# Temporary files and directories
+apaga_duplicata_raw_processed.py
+rascunho.py
 
 # Virtual environments
 .venv
