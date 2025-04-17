@@ -4,10 +4,23 @@ __pycache__/
 build/
 dist/
 wheels/
+data/
+data2/
 *.egg-info
+chroma_db/
+*.md
+*.pickle
+*.sqlite3
+*.bin
+
+# Temporary files and directories
+apaga_duplicata_raw_processed.py
+rascunho.py
 
 # Virtual environments
 .venv
 .env
 nohup.out
 log
+chat.pid
+api.pid

@@ -19,4 +19,9 @@ dependencies = [
     "sentence-transformers>=2.2.2",
     "pydantic>=2.5.2",
     "python-multipart>=0.0.6",
+    "docling>=2.28.4",
+    "hf-xet>=1.0.3",
+    "langchain-chroma>=0.2.2",
+    "langchain-huggingface>=0.1.2",
+    "huggingface-hub[hf-xet]>=0.30.1",
 ]

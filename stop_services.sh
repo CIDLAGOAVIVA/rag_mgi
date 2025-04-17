@@ -1,12 +1,21 @@
 #!/bin/bash
-if [ -f api.pid ]; then
-    kill $(cat api.pid)
-    rm api.pid
-    echo "API parada"
+
+echo "Parando serviços..."
+
+# Tenta matar o processo da API (porta 8000)
+sudo pkill -f "uvicorn main:app --host 0.0.0.0 --port 8000"
+if ! pgrep -f "uvicorn main:app" > /dev/null; then
+    echo "API parada com sucesso"
+else
+    echo "Erro ao parar API"
 fi
 
-if [ -f chat.pid ]; then
-    kill $(cat chat.pid)
-    rm chat.pid
-    echo "Chat parado"
+# Tenta matar o processo do Chat (portas 8520-8524)
+sudo pkill -f "python.*chat.py"
+if ! pgrep -f "python.*chat.py" > /dev/null; then
+    echo "Chat parado com sucesso"
+else
+    echo "Erro ao parar Chat"
 fi
+
+echo "Processo de parada concluído"
