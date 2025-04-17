@@ -9,105 +9,15 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.pydantic_v1 import BaseModel
 from langchain_deepseek import ChatDeepSeek # Importação principal já usada em rag_api.py
 # Nota: DeepSeekChatMessage e DeepSeekChatOptions podem não ser mais classes exportadas ou necessárias
-# A classe DeepSeekChat implementada neste arquivo já lida com a API diretamente.
+from langchain_core.language_models.chat_models import BaseChatModel # Import BaseChatModel
 
 load_dotenv()
 
-class DeepSeekChat:
-    """
-    A simple wrapper for the DeepSeek API that mimics the basic functionality 
-    of the ChatOpenAI class from LangChain.
-    """
-    def __init__(self, api_key=None, model='deepseek-chat', temperature=0, api_base=None):
-        if api_key is None:
-            # Tenta buscar a chave específica para o chunker primeiro
-            api_key = os.getenv("DEEPSEEK_API_KEY_CHUNK") 
-            # Se não encontrar, tenta a chave genérica
-            if api_key is None:
-                 api_key = os.getenv("DEEPSEEK_API_KEY")
-        
-        if api_key is None:
-            raise ValueError("API key is not provided and not found in environment variables (DEEPSEEK_API_KEY_CHUNK or DEEPSEEK_API_KEY)")
-            
-        self.api_key = api_key
-        self.model = model
-        self.temperature = temperature
-        # Usa a URL base padrão se nenhuma for fornecida
-        self.api_base = api_base or "https://api.deepseek.com/v1" # Corrigido para URL base da API
-
-    def invoke(self, messages_or_prompt, **kwargs):
-        """
-        Invoke the DeepSeek API with either a structured message format or a prompt dictionary.
-        
-        Args:
-            messages_or_prompt: Either a list of message dicts or a dict with the prompt content
-            
-        Returns:
-            A response object with a 'content' attribute containing the generated text
-        """
-        if isinstance(messages_or_prompt, dict) and "content" in messages_or_prompt:
-            # This is the case when a prompt is passed directly
-            content = messages_or_prompt["content"]
-            # Garante que messages seja uma lista de dicionários
-            messages = [{"role": "user", "content": content}] 
-        elif isinstance(messages_or_prompt, list):
-             # This is the case when a properly formatted message list is passed
-            messages = messages_or_prompt
-        else:
-            # Trata outros casos ou levanta um erro se o formato for inesperado
-            raise TypeError("Input must be a list of message dicts or a dict with 'content'")
-            
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.api_key}"
-        }
-        
-        data = {
-            "model": self.model,
-            "messages": messages,
-            "temperature": self.temperature
-        }
-        
-        # Constrói a URL completa para o endpoint de chat completions
-        chat_url = f"{self.api_base.rstrip('/')}/chat/completions"
-
-        # --- DEBUGGING ---
-        print("--- Enviando para DeepSeek API ---")
-        print(f"URL: {chat_url}")
-        print(f"Headers: {headers}") # Cuidado ao logar headers com chaves em produção
-        print(f"Data (Payload): {json.dumps(data, indent=2)}")
-        # --- FIM DEBUGGING ---
-
-        try:
-            response = requests.post(chat_url, headers=headers, data=json.dumps(data))
-            response.raise_for_status() # Levanta um erro para respostas HTTP ruins (4xx ou 5xx)
-        except requests.exceptions.RequestException as e:
-            print(f"Erro na requisição para DeepSeek API: {e}")
-            # Você pode querer retornar um erro ou um objeto de resposta padrão aqui
-            raise # Re-levanta a exceção para indicar falha
-
-        
-        result = response.json()
-        
-        # Verifica se a resposta contém os campos esperados
-        if "choices" in result and len(result["choices"]) > 0 and "message" in result["choices"][0] and "content" in result["choices"][0]["message"]:
-            content = result["choices"][0]["message"]["content"]
-        else:
-            # Lida com respostas inesperadas da API
-            print(f"Resposta inesperada da API DeepSeek: {result}")
-            content = "Erro: Resposta inesperada da API." # Ou levanta uma exceção
-
-        
-        # Return an object with a content attribute for compatibility with LangChain
-        class Response:
-            def __init__(self, content):
-                self.content = content
-                
-        return Response(content)
-
-
 class AgenticChunker:
-    def __init__(self, deepseek_api_key=None, api_base=None, model='deepseek-chat', print_logging=True): # Adicionado print_logging ao construtor
+    # -- API DO DEEPSEEK --
+    # def __init__(self, deepseek_api_key=None, api_base=None, model='deepseek-chat', print_logging=True): # Adicionado print_logging ao construtor para uso da API do deepseek
+    # -- MODELO LLM LOCAL --
+    def __init__(self, llm: BaseChatModel, print_logging=True): # Accept BaseChatModel
         self.chunks = {}
         self.id_truncate_limit = 5
 
@@ -115,9 +25,8 @@ class AgenticChunker:
         self.generate_new_metadata_ind = True
         self.print_logging = print_logging # Usar o parâmetro passado
 
-        # A chave API será tratada dentro da classe DeepSeekChat
-        # Não precisa ser passada explicitamente aqui se já estiver no .env
-        self.llm = DeepSeekChat(api_key=deepseek_api_key, model=model, temperature=0, api_base=api_base)
+        # Store the passed LLM instance
+        self.llm = llm # Use the passed llm object
 
     def add_propositions(self, propositions):
         for proposition in propositions:
@@ -404,11 +313,12 @@ class AgenticChunker:
 
 
 # Classe para criar proposições usando DeepSeek (funcionalidade extra baseada no artigo)
-class DeepSeekPropositionizer:
-    def __init__(self, api_key=None, api_base=None, model='deepseek-chat'):
-         # A chave API será tratada dentro da classe DeepSeekChat
-        self.llm = DeepSeekChat(api_key=api_key, model=model, temperature=0, api_base=api_base)
-    
+class LLMPropositionizer: # Rename class for clarity
+    # def __init__(self, api_key=None, api_base=None, model='deepseek-chat'):
+    def __init__(self, llm: BaseChatModel): # Accept BaseChatModel
+         # Store the passed LLM instance
+        self.llm = llm # Use the passed llm object
+
     def text_to_propositions(self, text):
         """
         Converte um texto em uma lista de proposições atômicas
@@ -449,31 +359,40 @@ class DeepSeekPropositionizer:
 
 
 if __name__ == "__main__":
-    # Exemplo de uso
-    # Certifique-se de que DEEPSEEK_API_KEY_CHUNK ou DEEPSEEK_API_KEY está no seu .env
+    # Exemplo de uso needs update if you want to run this file directly
+    # You would need to instantiate an LLM (like OllamaChat) here first
     try:
-        ac = AgenticChunker(print_logging=True) # Habilita logs para depuração
+        # --- Example setup for running directly (requires langchain_community) ---
+        # from langchain_community.chat_models import ChatOllama
+        # ollama_llm = ChatOllama(model="llama3:latest") 
+        # ac = AgenticChunker(llm=ollama_llm, print_logging=True) 
+        # prop_generator = LLMPropositionizer(llm=ollama_llm)
+        # --- End Example setup ---
+
+        # Comment out the original example or adapt it
+        # ac = AgenticChunker(print_logging=True) # Original instantiation
+        # prop_generator = DeepSeekPropositionizer() # Original instantiation
         
-        # Opcionalmente, podemos usar o Propositionizer para gerar proposições a partir de texto
-        prop_generator = DeepSeekPropositionizer()
-        text = """O artigo discute diferentes granularidades de recuperação em modelos de linguagem. 
-        Retrieval by propositions supera retrieval por sentenças ou passagens na maioria das tarefas 
-        para recuperadores não supervisionados e supervisionados. O céu é azul e a grama é verde."""
+        print("Running agentic_chunker.py directly requires manual LLM setup (see comments).")
         
-        print("Gerando proposições...")
-        propositions = prop_generator.text_to_propositions(text)
+        # text = """O artigo discute diferentes granularidades de recuperação em modelos de linguagem. 
+        # Retrieval by propositions supera retrieval por sentenças ou passagens na maioria das tarefas 
+        # para recuperadores não supervisionados e supervisionados. O céu é azul e a grama é verde."""
         
-        if propositions:
-            print(f"Proposições geradas: {propositions}")
-            ac.add_propositions(propositions)
+        # print("Gerando proposições...")
+        # propositions = prop_generator.text_to_propositions(text)
+        
+        # if propositions:
+        #     print(f"Proposições geradas: {propositions}")
+        #     ac.add_propositions(propositions)
             
-            # Imprimir resultados
-            ac.pretty_print_chunks()
-            ac.pretty_print_chunk_outline()
-            print("\nChunks como lista de strings:")
-            print(ac.get_chunks(get_type='list_of_strings'))
-        else:
-            print("Nenhuma proposição foi gerada.")
+        #     # Imprimir resultados
+        #     ac.pretty_print_chunks()
+        #     ac.pretty_print_chunk_outline()
+        #     print("\nChunks como lista de strings:")
+        #     print(ac.get_chunks(get_type='list_of_strings'))
+        # else:
+        #     print("Nenhuma proposição foi gerada.")
 
     except ValueError as ve:
          print(f"Erro de configuração: {ve}")

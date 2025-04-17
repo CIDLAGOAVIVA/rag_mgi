@@ -65,77 +65,89 @@ try:
     documentos = loader.load()
     print(f"Carregados {len(documentos)} documentos")
 
-    ### -- PROCESSAMENTO DE DOCUMENTOS USANDO O AGENTIC_CHUNKER -- ###
+    ### -- PROCESSAMENTO DE DOCUMENTOS USANDO O AGENTIC_CHUNKER COM OLLAMA -- ###
 
-    # # Convertendo documentos em proposições e chunks semânticos
-    # print("Processando documentos e criando proposições...")
-    # propositionizer = DeepSeekPropositionizer()
-    # chunker = AgenticChunker(print_logging=False)
-    
-    # chunks = []
-    # for documento in documentos:
-    #     # Extrair proposições do texto
-    #     proposicoes = propositionizer.text_to_propositions(documento.page_content)
-        
-    #     # Adicionar proposições ao chunker
-    #     for proposicao in proposicoes:
-    #         chunker.add_proposition(proposicao)
-    
-    # # Obter os chunks processados
-    # chunk_dict = chunker.get_chunks(get_type='dict')
-    # print(f"Criados {len(chunk_dict)} chunks semânticos")
-    
-    # # Converter os chunks semanticamente agrupados para o formato Document do LangChain
-    # from langchain_core.documents import Document
-    # processed_chunks = []
-    
-    # for chunk_id, chunk_data in chunk_dict.items():
-    #     # Juntar todas as proposições do chunk em um único texto
-    #     chunk_text = " ".join(chunk_data['propositions'])
-        
-    #     # Criar um novo Document com metadados enriquecidos
-    #     doc = Document(
-    #         page_content=chunk_text,
-    #         metadata={
-    #             'source': documento.metadata.get('source', 'unknown'),
-    #             'chunk_id': chunk_id,
-    #             'title': chunk_data['title'],
-    #             'summary': chunk_data['summary']
-    #         }
-    #     )
-    #     processed_chunks.append(doc)
-    
-    # chunks = processed_chunks
-    # print(f"Processados {len(chunks)} chunks para indexação")
+    # Importar ChatOllama
+    from langchain_community.chat_models import ChatOllama
+    from langchain_core.documents import Document
+    from processing.agentic_chunker import LLMPropositionizer, AgenticChunker
 
-    # # Verificar se já existe um banco de dados persistente
-    # if os.path.exists("./chroma_db") and os.path.isdir("./chroma_db"):
-    #     print("Carregando base de dados vetorial existente...")
-    #     from sentence_transformers import SentenceTransformer
+    # Convertendo documentos em proposições e chunks semânticos
+    print("Processando documentos e criando proposições com Llama3...")
+    
+    # Instanciar o modelo Ollama local
+    ollama_llm = ChatOllama(model="llama3:latest", temperature=0.0)
+    
+    # Criar instâncias do propositionizer e chunker com o modelo Ollama
+    propositionizer = LLMPropositionizer(llm=ollama_llm)
+    chunker = AgenticChunker(llm=ollama_llm, print_logging=False)
+    
+    processed_chunks = []
+    
+    # Processar cada documento separadamente
+    for i, documento in enumerate(documentos):
+        print(f"Processando documento {i+1}/{len(documentos)}: {documento.metadata.get('source', 'unknown')}")
         
-    #     # Criar adaptador para SentenceTransformer compatível com LangChain
-    #     class SentenceTransformerEmbeddings:
-    #         def __init__(self, model_name):
-    #             self.model = SentenceTransformer(model_name)
-                
-    #         def embed_documents(self, texts):
-    #             return self.model.encode(texts)
-                
-    #         def embed_query(self, text):
-    #             return self.model.encode(text)
+        # Extrair proposições do texto usando Llama3
+        proposicoes = propositionizer.text_to_propositions(documento.page_content)
+        
+        # Processar documento por documento para evitar mistura entre documentos diferentes
+        doc_chunker = AgenticChunker(llm=ollama_llm, print_logging=False)
+        
+        # Adicionar proposições ao chunker do documento atual
+        doc_chunker.add_propositions(proposicoes)
+        
+        # Obter os chunks processados para este documento
+        chunk_dict = doc_chunker.get_chunks(get_type='dict')
+        print(f"  -> Criados {len(chunk_dict)} chunks semânticos para este documento")
+        
+        # Converter os chunks semanticamente agrupados para o formato Document do LangChain
+        for chunk_id, chunk_data in chunk_dict.items():
+            # Juntar todas as proposições do chunk em um único texto
+            chunk_text = " ".join(chunk_data['propositions'])
+            
+            # Criar um novo Document com metadados enriquecidos
+            doc = Document(
+                page_content=chunk_text,
+                metadata={
+                    'source': documento.metadata.get('source', 'unknown'),
+                    'chunk_id': chunk_id,
+                    'title': chunk_data['title'],
+                    'summary': chunk_data['summary']
+                }
+            )
+            processed_chunks.append(doc)
     
-    # # Criar instância do adaptador
-    # embeddings = SentenceTransformerEmbeddings("intfloat/e5-mistral-7b-instruct")
-    # vectorstore = Chroma(persist_directory="./chroma_db",
-    #                      embedding_function=embeddings)
-    
-    ### -- DIVISÃO MANUAL EM CHUNKS -- ###
+    chunks = processed_chunks
+    print(f"Processados {len(chunks)} chunks para indexação")
 
-    print("Dividindo documentos em chunks...")
-    text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=256, chunk_overlap=51)
-    chunks = text_splitter.split_documents(documentos)
-    print(f"Criados {len(chunks)} chunks")
+    # Verificar se já existe um banco de dados persistente
+    if os.path.exists("./chroma_db") and os.path.isdir("./chroma_db"):
+        print("Carregando base de dados vetorial existente...")
+        embeddings = HuggingFaceEmbeddings(
+            model_name="sentence-transformers/all-MiniLM-L6-v2")
+        vectorstore = Chroma(persist_directory="./chroma_db",
+                             embedding_function=embeddings)
+        
+    else:
+        # Crie embeddings e armazene em uma base vetorial
+        print("Criando nova base de dados vetorial...")
+        embeddings = HuggingFaceEmbeddings(
+            model_name="sentence-transformers/all-MiniLM-L6-v2")
+        
+        vectorstore = Chroma.from_documents(
+            documents=chunks,
+            embedding=embeddings,
+            persist_directory="./chroma_db" # A persistência ocorre aqui
+        )
+
+    ### -- DIVISÃO MANUAL EM CHUNKS (desativada, usando agentic chunker com Llama3) -- ###
+
+    # print("Dividindo documentos em chunks...")
+    # text_splitter = RecursiveCharacterTextSplitter(
+    #     chunk_size=256, chunk_overlap=51)
+    # chunks = text_splitter.split_documents(documentos)
+    # print(f"Criados {len(chunks)} chunks")
 
     # Verificar se já existe um banco de dados persistente
     if os.path.exists("./chroma_db") and os.path.isdir("./chroma_db"):
