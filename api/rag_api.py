@@ -179,8 +179,8 @@ try:
     if __name__ == "__main__":
         import uvicorn
         print("Iniciando servidor RAG API com Semantic Chunking...")
-        print("Acesse a documentação em: http://localhost:8009/docs")
-        uvicorn.run(app, host="0.0.0.0", port=8009)
+        print("Acesse a documentação em: http://localhost:8008/docs")
+        uvicorn.run(app, host="0.0.0.0", port=8008)
 
 except Exception as e:
     print(f"Ocorreu um erro: {e}")

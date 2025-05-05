@@ -71,7 +71,7 @@ def custom_api_response(message, history):
 def rag_chat_response(message, history):
     try:
         response = requests.post(
-            "http://localhost:8000/query",
+            "http://localhost:8008/query",
             json={"query": message}
         )
 
@@ -107,15 +107,15 @@ with gr.Blocks() as demo:
             type='messages'  # Adicionando o tipo explicitamente
         )
 
-    with gr.Tab("Chat RAG - IMBEL/CEITEC/TELEBRAS"):
+    with gr.Tab("Chat RAG - TELEBRAS"):
         rag_chatbot = gr.ChatInterface(
             rag_chat_response,
             chatbot=gr.Chatbot(height=400, type='messages'),
             textbox=gr.Textbox(
-                placeholder="Digite sua pergunta sobre IMBEL/CEITEC/TELEBRAS...",
+                placeholder="Digite sua pergunta sobre TELEBRAS...",
                 container=False
             ),
-            title="Chat RAG - IMBEL/CEITEC/TELEBRAS",
+            title="Chat RAG - TELEBRAS",
             type='messages'
         )
 
