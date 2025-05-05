@@ -42,51 +42,6 @@ if "DEEPSEEK_API_KEY" not in os.environ:
     sys.exit(1)
 
 try:
-    # Carregando documentos da pasta selecionada
-    print("Carregando documentos...")
-    loader = DirectoryLoader('./data2/processed', glob="**/*.md",
-                             loader_cls=lambda file_path: TextLoader(file_path, encoding='utf-8'), show_progress=True)
-    documentos = loader.load()
-    print(f"Carregados {len(documentos)} documentos")
-
-    # Processando documentos com o E5 Semantic Chunker
-    print("Processando documentos com chunking semântico...")
-    
-    # Instanciar o chunker semântico
-    chunker = E5SemanticChunker(
-        model_name="intfloat/multilingual-e5-base",
-        similarity_threshold=0.7,  # Ajuste conforme necessário para seu conteúdo
-        max_tokens_per_chunk=700,
-        min_tokens_per_chunk=100,
-        print_logging=True
-    )
-    
-    processed_chunks = []
-    
-    # Processar cada documento separadamente
-    for i, documento in enumerate(documentos):
-        print(f"Processando documento {i+1}/{len(documentos)}: {documento.metadata.get('source', 'unknown')}")
-        
-        # Chunk o conteúdo do documento
-        doc_chunks = chunker.chunk_text(documento.page_content)
-        
-        # Converter os chunks em documentos LangChain
-        for j, chunk_text in enumerate(doc_chunks):
-            doc = Document(
-                page_content=chunk_text,
-                metadata={
-                    'source': documento.metadata.get('source', 'unknown'),
-                    'chunk_id': f"{i}_{j}",
-                    'doc_id': i,
-                    'chunk_idx': j,
-                    'total_chunks': len(doc_chunks)
-                }
-            )
-            processed_chunks.append(doc)
-    
-    chunks = processed_chunks
-    print(f"Processados {len(chunks)} chunks para indexação")
-
     # Verificar se já existe um banco de dados persistente
     if os.path.exists("./chroma_db_semantic") and os.path.isdir("./chroma_db_semantic"):
         print("Carregando base de dados vetorial existente...")
@@ -94,8 +49,55 @@ try:
             model_name="intfloat/multilingual-e5-base")
         vectorstore = Chroma(persist_directory="./chroma_db_semantic",
                              embedding_function=embeddings)
+        # Pulando processamento de documentos, pois já temos vetores persistidos
+        print("Base de dados existente carregada. Pulando processamento de documentos.")
         
     else:
+        # Carregando documentos da pasta selecionada
+        print("Carregando documentos...")
+        loader = DirectoryLoader('./data2/processed', glob="**/*.md",
+                                 loader_cls=lambda file_path: TextLoader(file_path, encoding='utf-8'), show_progress=True)
+        documentos = loader.load()
+        print(f"Carregados {len(documentos)} documentos")
+
+        # Processando documentos com o E5 Semantic Chunker
+        print("Processando documentos com chunking semântico...")
+        
+        # Instanciar o chunker semântico
+        chunker = E5SemanticChunker(
+            model_name="intfloat/multilingual-e5-base",
+            similarity_threshold=0.7,  # Ajuste conforme necessário para seu conteúdo
+            max_tokens_per_chunk=700,
+            min_tokens_per_chunk=100,
+            print_logging=True
+        )
+        
+        processed_chunks = []
+        
+        # Processar cada documento separadamente
+        for i, documento in enumerate(documentos):
+            print(f"Processando documento {i+1}/{len(documentos)}: {documento.metadata.get('source', 'unknown')}")
+            
+            # Chunk o conteúdo do documento
+            doc_chunks = chunker.chunk_text(documento.page_content)
+            
+            # Converter os chunks em documentos LangChain
+            for j, chunk_text in enumerate(doc_chunks):
+                doc = Document(
+                    page_content=chunk_text,
+                    metadata={
+                        'source': documento.metadata.get('source', 'unknown'),
+                        'chunk_id': f"{i}_{j}",
+                        'doc_id': i,
+                        'chunk_idx': j,
+                        'total_chunks': len(doc_chunks)
+                    }
+                )
+                processed_chunks.append(doc)
+        
+        chunks = processed_chunks
+        print(f"Processados {len(chunks)} chunks para indexação")
+        
         # Crie embeddings e armazene em uma base vetorial
         print("Criando nova base de dados vetorial...")
         embeddings = HuggingFaceEmbeddings(
