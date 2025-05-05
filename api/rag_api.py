@@ -1,30 +1,26 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import os
-import dotenv
+import sys
 from dotenv import load_dotenv
 from langchain_community.embeddings import HuggingFaceEmbeddings
-from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import Chroma
-from langchain_chroma import Chroma
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_deepseek import ChatDeepSeek
-from langchain.chains import RetrievalQA
 from langchain_community.document_loaders import TextLoader, DirectoryLoader
 from langchain.prompts import PromptTemplate
-from sentence_transformers import SentenceTransformer
-import sys
-import re
-from datetime import datetime
-from pydantic import BaseModel
+from langchain_deepseek import ChatDeepSeek
+from langchain.chains import RetrievalQA
+from langchain_core.documents import Document
 from typing import List
+from pydantic import BaseModel
+import time
 
+# Adicionar o diretório raiz do projeto ao path ANTES da importação local
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
-# Adicionar as importações necessárias para o agentic_chunker
-from processing.agentic_chunker import DeepSeekPropositionizer, AgenticChunker
-import uuid
+
+# Importar o chunker semântico (agora o path está correto)
+from processing.semantic_chunker import E5SemanticChunker
 
 app = FastAPI()
 
@@ -40,18 +36,6 @@ app.add_middleware(
 # Carregar variáveis de ambiente
 load_dotenv()
 
-text = """
-Dense retrieval se tornou um método proeminente para obter contexto relevante ou conhecimento mundial em tarefas de PNL de domínio aberto. 
-Quando usamos um recuperador denso aprendido em um corpus de recuperação no momento da inferência, uma escolha de design frequentemente 
-negligenciada é a unidade de recuperação na qual o corpus é indexado, por exemplo, documento, passagem ou sentença. 
-Descobrimos que a escolha da unidade de recuperação impacta significativamente o desempenho das tarefas de recuperação e downstream. 
-Distinto da abordagem típica de usar passagens ou sentenças, introduzimos uma nova unidade de recuperação, proposição, para recuperação densa. 
-Proposições são definidas como expressões atômicas dentro do texto, cada uma encapsulando um factóide distinto e apresentada em um formato 
-de linguagem natural conciso e autocontido. Conduzimos uma comparação empírica de diferentes granularidades de recuperação. 
-Nossos experimentos revelam que indexar um corpus por unidades de granulação fina, como proposições, supera significativamente as unidades 
-de nível de passagem em tarefas de recuperação.
-"""
-
 # Verificar se a chave API está definida
 if "DEEPSEEK_API_KEY" not in os.environ:
     print("Erro: Chave de API do DeepSeek não encontrada no arquivo .env")
@@ -65,22 +49,17 @@ try:
     documentos = loader.load()
     print(f"Carregados {len(documentos)} documentos")
 
-    ### -- PROCESSAMENTO DE DOCUMENTOS USANDO O AGENTIC_CHUNKER COM OLLAMA -- ###
-
-    # Importar ChatOllama
-    from langchain_community.chat_models import ChatOllama
-    from langchain_core.documents import Document
-    from processing.agentic_chunker import LLMPropositionizer, AgenticChunker
-
-    # Convertendo documentos em proposições e chunks semânticos
-    print("Processando documentos e criando proposições com Llama3...")
+    # Processando documentos com o E5 Semantic Chunker
+    print("Processando documentos com chunking semântico...")
     
-    # Instanciar o modelo Ollama local
-    ollama_llm = ChatOllama(model="llama3:latest", temperature=0.0)
-    
-    # Criar instâncias do propositionizer e chunker com o modelo Ollama
-    propositionizer = LLMPropositionizer(llm=ollama_llm)
-    chunker = AgenticChunker(llm=ollama_llm, print_logging=False)
+    # Instanciar o chunker semântico
+    chunker = E5SemanticChunker(
+        model_name="intfloat/multilingual-e5-base",
+        similarity_threshold=0.7,  # Ajuste conforme necessário para seu conteúdo
+        max_tokens_per_chunk=700,
+        min_tokens_per_chunk=100,
+        print_logging=True
+    )
     
     processed_chunks = []
     
@@ -88,32 +67,19 @@ try:
     for i, documento in enumerate(documentos):
         print(f"Processando documento {i+1}/{len(documentos)}: {documento.metadata.get('source', 'unknown')}")
         
-        # Extrair proposições do texto usando Llama3
-        proposicoes = propositionizer.text_to_propositions(documento.page_content)
+        # Chunk o conteúdo do documento
+        doc_chunks = chunker.chunk_text(documento.page_content)
         
-        # Processar documento por documento para evitar mistura entre documentos diferentes
-        doc_chunker = AgenticChunker(llm=ollama_llm, print_logging=False)
-        
-        # Adicionar proposições ao chunker do documento atual
-        doc_chunker.add_propositions(proposicoes)
-        
-        # Obter os chunks processados para este documento
-        chunk_dict = doc_chunker.get_chunks(get_type='dict')
-        print(f"  -> Criados {len(chunk_dict)} chunks semânticos para este documento")
-        
-        # Converter os chunks semanticamente agrupados para o formato Document do LangChain
-        for chunk_id, chunk_data in chunk_dict.items():
-            # Juntar todas as proposições do chunk em um único texto
-            chunk_text = " ".join(chunk_data['propositions'])
-            
-            # Criar um novo Document com metadados enriquecidos
+        # Converter os chunks em documentos LangChain
+        for j, chunk_text in enumerate(doc_chunks):
             doc = Document(
                 page_content=chunk_text,
                 metadata={
                     'source': documento.metadata.get('source', 'unknown'),
-                    'chunk_id': chunk_id,
-                    'title': chunk_data['title'],
-                    'summary': chunk_data['summary']
+                    'chunk_id': f"{i}_{j}",
+                    'doc_id': i,
+                    'chunk_idx': j,
+                    'total_chunks': len(doc_chunks)
                 }
             )
             processed_chunks.append(doc)
@@ -122,95 +88,40 @@ try:
     print(f"Processados {len(chunks)} chunks para indexação")
 
     # Verificar se já existe um banco de dados persistente
-    if os.path.exists("./chroma_db") and os.path.isdir("./chroma_db"):
+    if os.path.exists("./chroma_db_semantic") and os.path.isdir("./chroma_db_semantic"):
         print("Carregando base de dados vetorial existente...")
         embeddings = HuggingFaceEmbeddings(
-            model_name="sentence-transformers/all-MiniLM-L6-v2")
-        vectorstore = Chroma(persist_directory="./chroma_db",
+            model_name="intfloat/multilingual-e5-base")
+        vectorstore = Chroma(persist_directory="./chroma_db_semantic",
                              embedding_function=embeddings)
         
     else:
         # Crie embeddings e armazene em uma base vetorial
         print("Criando nova base de dados vetorial...")
         embeddings = HuggingFaceEmbeddings(
-            model_name="sentence-transformers/all-MiniLM-L6-v2")
+            model_name="intfloat/multilingual-e5-base")
         
+        # Criar a base vetorial e persistir
         vectorstore = Chroma.from_documents(
             documents=chunks,
             embedding=embeddings,
-            persist_directory="./chroma_db" # A persistência ocorre aqui
+            persist_directory="./chroma_db_semantic"
         )
 
-    ### -- DIVISÃO MANUAL EM CHUNKS (desativada, usando agentic chunker com Llama3) -- ###
-
-    # print("Dividindo documentos em chunks...")
-    # text_splitter = RecursiveCharacterTextSplitter(
-    #     chunk_size=256, chunk_overlap=51)
-    # chunks = text_splitter.split_documents(documentos)
-    # print(f"Criados {len(chunks)} chunks")
-
-    # Verificar se já existe um banco de dados persistente
-    if os.path.exists("./chroma_db") and os.path.isdir("./chroma_db"):
-        print("Carregando base de dados vetorial existente...")
-        embeddings = HuggingFaceEmbeddings(
-            model_name="sentence-transformers/all-MiniLM-L6-v2")
-        vectorstore = Chroma(persist_directory="./chroma_db",
-                             embedding_function=embeddings)
-        
-    else:
-        # Crie embeddings e armazene em uma base vetorial
-        print("Criando nova base de dados vetorial...")
-        from sentence_transformers import SentenceTransformer
-        
-        # Criar adaptador para SentenceTransformer compatível com LangChain
-        class SentenceTransformerEmbeddings:
-            def __init__(self, model_name):
-                self.model = SentenceTransformer(model_name)
-                
-            def embed_documents(self, texts):
-                return self.model.encode(texts)
-                
-            def embed_query(self, text):
-                return self.model.encode(text)
-        
-        # Criar instância do adaptador
-        embeddings = SentenceTransformerEmbeddings("sentence-transformers/all-MiniLM-L6-v2")
-        vectorstore = Chroma.from_documents(
-            documents=chunks,
-            embedding=embeddings,
-            persist_directory="./chroma_db" # A persistência ocorre aqui
-        )
-
-    #  Configure o retrievador usando MMR para buscar documentos relevantes e diversos
+    # Configure o retrievador usando MMR para buscar documentos relevantes e diversos
     retriever = vectorstore.as_retriever(
         search_type="mmr",  # Maximum Marginal Relevance
         search_kwargs={
-            "k": 8,
+            "k": 5,         # Número de documentos a recuperar
             "fetch_k": 20,  # Busca mais documentos inicialmente
-            "lambda_mult": 0.7,  # Equilíbrio entre relevância e diversidade
+            "lambda_mult": 0.7,  # Equilíbrio entre relevância (0) e diversidade (1)
         }
     )
 
-    # Template de prompt personalizado para melhorar as respostas
-    # template = """
-    # Você é um especialista em analisar e extrair informações de documentos acadêmicos e técnicos, principalmente dados administrativos e financeiros.
-
-    # INSTRUÇÕES:
-    # 1. Use principalmente as informações fornecidas na FONTE para responder à pergunta.
-    # 2. Seja detalhado e preciso em sua resposta, mantendo um tom neutro e objetivo.
-    # 3. Cite informações específicas dos documentos, incluindo números, datas e fatos quando disponíveis.
-    # 4. Quando documentos apresentarem diferentes perspectivas sobre o mesmo assunto, mencione essas diferentes visões.
-    # 5. Se a informação não estiver explicitamente disponível na fonte, indique quais partes do contexto são relevantes para a pergunta, mesmo que incompletas.
-            
-    # Contexto: {context}
-            
-    # Pergunta: {question}
-            
-    # Resposta:
-    # """
-    
+    # Template de prompt personalizado
     template = """
-    Você é um especialista em analisar e extrair informações de documentos acadêmicos e técnicos, principalmente dados administrativos e financeiros.
+    Você é um especialista em analisar e extrair informações de documentos. Trabalhe de forma detalhada
+    com os documentos fornecidos como contexto para responder às perguntas.
     
     Contexto: {context}
             
@@ -226,9 +137,9 @@ try:
 
     # Configure o modelo de linguagem
     llm = ChatDeepSeek(
-        model="deepseek-reasoner",
+        model="deepseek-chat",  # ou outro modelo disponível
         temperature=0.1,
-        max_tokens=4096,
+        max_tokens=2048,
         timeout=None,
         max_retries=3,
     )
@@ -248,24 +159,28 @@ try:
     class QueryResponse(BaseModel):
         answer: str
         sources: List[str]
+        processing_time: float
 
     @app.post("/query", response_model=QueryResponse)
     async def process_query(request: QueryRequest):
         try:
+            start_time = time.time()
             response = rag_chain({"query": request.query})
+            processing_time = time.time() - start_time
+            
             return QueryResponse(
                 answer=response["result"],
-                sources=[doc.metadata['source']
-                         for doc in response["source_documents"]]
+                sources=[doc.metadata['source'] for doc in response["source_documents"]],
+                processing_time=processing_time
             )
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
 
     if __name__ == "__main__":
         import uvicorn
-        print("Iniciando servidor RAG API...")
-        print("Acesse a documentação em: http://localhost:8008/docs")
-        uvicorn.run(app, host="0.0.0.0", port=8008)
+        print("Iniciando servidor RAG API com Semantic Chunking...")
+        print("Acesse a documentação em: http://localhost:8009/docs")
+        uvicorn.run(app, host="0.0.0.0", port=8009)
 
 except Exception as e:
     print(f"Ocorreu um erro: {e}")

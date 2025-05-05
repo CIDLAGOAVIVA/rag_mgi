@@ -4,7 +4,7 @@ from docling.document_converter import DocumentConverter
 from docling.exceptions import ConversionError # Importar a exceção específica
 
 # Definir diretórios de entrada e saída
-input_dir = "./data2/raw/ceitec_data_pdf"
+input_dir = "./data2/raw"
 output_dir = "./data2/processed"
 
 # Criar a pasta de saída se ela não existir
