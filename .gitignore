@@ -12,6 +12,7 @@ chroma_db/
 *.pickle
 *.sqlite3
 *.bin
+MCP/
 
 # Temporary files and directories
 apaga_duplicata_raw_processed.py

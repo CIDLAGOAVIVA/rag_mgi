@@ -19,8 +19,11 @@ project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-# Importar o chunker semântico (agora o path está correto)
+# Importar o chunker semântico e o MCP manager
 from processing.semantic_chunker import E5SemanticChunker
+from mcp.mcp_manager import MCPManager
+from mcp.mcp_validator import MCPValidator  # Novo import
+from mcp.mcp_logger import MCPLogger  # Novo import
 
 app = FastAPI()
 
@@ -40,6 +43,11 @@ load_dotenv()
 if "DEEPSEEK_API_KEY" not in os.environ:
     print("Erro: Chave de API do DeepSeek não encontrada no arquivo .env")
     sys.exit(1)
+
+# Inicializar componentes MCP
+mcp_manager = MCPManager(max_context_length=6000)
+mcp_validator = MCPValidator()  # Novo
+mcp_logger = MCPLogger()  # Novo
 
 try:
     # Verificar se já existe um banco de dados persistente
@@ -114,27 +122,10 @@ try:
     retriever = vectorstore.as_retriever(
         search_type="mmr",  # Maximum Marginal Relevance
         search_kwargs={
-            "k": 5,         # Número de documentos a recuperar
+            "k": 11,         # Número de documentos a recuperar
             "fetch_k": 20,  # Busca mais documentos inicialmente
             "lambda_mult": 0.7,  # Equilíbrio entre relevância (0) e diversidade (1)
         }
-    )
-
-    # Template de prompt personalizado
-    template = """
-    Você é um especialista em analisar e extrair informações de documentos. Trabalhe de forma detalhada
-    com os documentos fornecidos como contexto para responder às perguntas.
-    
-    Contexto: {context}
-            
-    Pergunta: {question}
-            
-    Resposta:
-    """
-
-    PROMPT = PromptTemplate(
-        template=template,
-        input_variables=["context", "question"]
     )
 
     # Configure o modelo de linguagem
@@ -144,15 +135,6 @@ try:
         max_tokens=2048,
         timeout=None,
         max_retries=3,
-    )
-
-    # Configure a chain RAG
-    rag_chain = RetrievalQA.from_chain_type(
-        llm=llm,
-        chain_type="stuff",
-        retriever=retriever,
-        return_source_documents=True,
-        chain_type_kwargs={"prompt": PROMPT}
     )
 
     class QueryRequest(BaseModel):
@@ -167,12 +149,43 @@ try:
     async def process_query(request: QueryRequest):
         try:
             start_time = time.time()
-            response = rag_chain({"query": request.query})
+            
+            # Recuperar documentos relevantes
+            retrieved_docs = retriever.get_relevant_documents(request.query)
+            
+            # Formatar o contexto usando MCP
+            mcp_context = mcp_manager.format_context(retrieved_docs)
+            
+            # Criar o prompt MCP completo
+            mcp_prompt = mcp_manager.create_mcp_prompt(request.query, mcp_context)
+            
+            # Chamar o modelo com o prompt MCP
+            response = llm.invoke(mcp_prompt)
+            model_response = response.content
+            
+            # Validar a resposta (opcional)
+            validation_results = mcp_validator.validate_response(
+                model_response, request.query, retrieved_docs
+            )
+            
+            # Registrar a interação (opcional)
             processing_time = time.time() - start_time
+            mcp_logger.log_interaction(
+                query=request.query,
+                mcp_prompt=mcp_prompt,
+                response=model_response,
+                retrieved_docs=retrieved_docs,
+                validation_results=validation_results,
+                processing_time=processing_time
+            )
+            
+            # Extrair fontes dos documentos recuperados
+            sources = [doc.metadata.get('source', 'unknown').split('/')[-1] 
+                      for doc in retrieved_docs]
             
             return QueryResponse(
-                answer=response["result"],
-                sources=[doc.metadata['source'] for doc in response["source_documents"]],
+                answer=model_response,
+                sources=sources,
                 processing_time=processing_time
             )
         except Exception as e:
@@ -180,9 +193,9 @@ try:
 
     if __name__ == "__main__":
         import uvicorn
-        print("Iniciando servidor RAG API com Semantic Chunking...")
-        print("Acesse a documentação em: http://localhost:8008/docs")
-        uvicorn.run(app, host="0.0.0.0", port=8008)
+        print("Iniciando servidor RAG API com Semantic Chunking e MCP...")
+        print("Acesse a documentação em: http://localhost:8099/docs")
+        uvicorn.run(app, host="0.0.0.0", port=8099)
 
 except Exception as e:
     print(f"Ocorreu um erro: {e}")

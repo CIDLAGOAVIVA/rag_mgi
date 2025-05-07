@@ -71,7 +71,7 @@ def custom_api_response(message, history):
 def rag_chat_response(message, history):
     try:
         response = requests.post(
-            "http://localhost:8008/query",
+            "http://localhost:8099/query",
             json={"query": message}
         )
 
@@ -79,10 +79,10 @@ def rag_chat_response(message, history):
             data = response.json()
             answer = data["answer"]
             sources = data["sources"]
-
+            
             # Formatar resposta com as fontes
-            full_response = f"{answer}\n\nFontes:\n" + \
-                "\n".join([f"- {s}" for s in sources])
+            source_list = "\n".join([f"- {s}" for s in sources])
+            full_response = f"{answer}\n\n**Fontes consultadas:**\n{source_list}"
             return full_response
         else:
             return f"Erro na API: {response.status_code}"
