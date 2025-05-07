@@ -42,6 +42,19 @@ if "DEEPSEEK_API_KEY" not in os.environ:
     sys.exit(1)
 
 try:
+    # Definir os caminhos para busca de documentos
+    base_paths = [
+        '/mnt/data02/MGI/projetoscid/060 Sites Institucionais CEITEC',
+        '/mnt/data02/MGI/projetoscid/061 Sites Institucionais IMBEL',
+        '/mnt/data02/MGI/projetoscid/062 Sites Institucionais Telebras',
+        '/mnt/data02/MGI/projetoscid/070 Artigos Científicos',
+        '/mnt/data02/MGI/projetoscid/080 Transparência',
+        '/mnt/data02/MGI/projetoscid/090 Prompts e Scripts',
+        '/mnt/data02/MGI/projetoscid/091 Notícias Ceitec',
+        '/mnt/data02/MGI/projetoscid/092 Notícias Imbel',
+        '/mnt/data02/MGI/projetoscid/093 Notícias Telebras'
+    ]
+    
     # Verificar se já existe um banco de dados persistente
     if os.path.exists("./chroma_db_semantic") and os.path.isdir("./chroma_db_semantic"):
         print("Carregando base de dados vetorial existente...")
@@ -53,12 +66,27 @@ try:
         print("Base de dados existente carregada. Pulando processamento de documentos.")
         
     else:
-        # Carregando documentos da pasta selecionada
-        print("Carregando documentos...")
-        loader = DirectoryLoader('./data2/processed', glob="**/*.md",
-                                 loader_cls=lambda file_path: TextLoader(file_path, encoding='utf-8'), show_progress=True)
-        documentos = loader.load()
-        print(f"Carregados {len(documentos)} documentos")
+        # Carregando documentos de múltiplas pastas
+        print("Carregando documentos de múltiplas pastas...")
+        documentos = []
+        
+        for base_path in base_paths:
+            if os.path.exists(base_path) and os.path.isdir(base_path):
+                print(f"Carregando documentos de: {base_path}")
+                loader = DirectoryLoader(base_path, glob="**/*.md",
+                                 loader_cls=lambda file_path: TextLoader(file_path, encoding='utf-8'), 
+                                 show_progress=True)
+                docs_pasta = loader.load()
+                documentos.extend(docs_pasta)
+                print(f"  - Carregados {len(docs_pasta)} documentos desta pasta")
+            else:
+                print(f"Aviso: Pasta não encontrada: {base_path}")
+        
+        print(f"Carregados {len(documentos)} documentos no total")
+        
+        if len(documentos) == 0:
+            print("Nenhum documento encontrado nas pastas especificadas. Verifique os caminhos.")
+            sys.exit(1)
 
         # Processando documentos com o E5 Semantic Chunker
         print("Processando documentos com chunking semântico...")
