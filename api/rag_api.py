@@ -2,6 +2,8 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import os
 import sys
+import json
+import hashlib
 from dotenv import load_dotenv
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import Chroma
@@ -10,9 +12,10 @@ from langchain.prompts import PromptTemplate
 from langchain_deepseek import ChatDeepSeek
 from langchain.chains import RetrievalQA
 from langchain_core.documents import Document
-from typing import List
+from typing import List, Dict
 from pydantic import BaseModel
 import time
+from datetime import datetime
 
 # Adicionar o diretório raiz do projeto ao path ANTES da importação local
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -21,6 +24,37 @@ if project_root not in sys.path:
 
 # Importar o chunker semântico (agora o path está correto)
 from processing.semantic_chunker import E5SemanticChunker
+
+# Definir as constantes de configuração (mesmas do update_vectordb.py)
+CHROMA_DB_DIR = "./chroma_db_semantic"
+PROCESSED_FILES_RECORD = "./processed_files.json"
+EMBEDDING_MODEL = "intfloat/multilingual-e5-base"
+
+# Funções para gerenciar o registro de arquivos processados (copiadas do update_vectordb.py)
+def calculate_file_hash(file_path: str) -> str:
+    """Calcula o hash MD5 de um arquivo para verificar modificações."""
+    hash_md5 = hashlib.md5()
+    with open(file_path, "rb") as f:
+        for chunk in iter(lambda: f.read(4096), b""):
+            hash_md5.update(chunk)
+    return hash_md5.hexdigest()
+
+def load_processed_files() -> Dict[str, str]:
+    """Carrega o registro de arquivos processados."""
+    if os.path.exists(PROCESSED_FILES_RECORD):
+        try:
+            with open(PROCESSED_FILES_RECORD, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except json.JSONDecodeError:
+            print(f"Erro ao ler arquivo de registro. Criando novo registro.")
+            return {}
+    return {}
+
+def save_processed_files(processed_files: Dict[str, str]) -> None:
+    """Salva o registro de arquivos processados."""
+    with open(PROCESSED_FILES_RECORD, 'w', encoding='utf-8') as f:
+        json.dump(processed_files, f, ensure_ascii=False, indent=2)
+
 
 app = FastAPI()
 
@@ -55,20 +89,24 @@ try:
         '/mnt/data02/MGI/projetoscid/093 Notícias Telebras'
     ]
     
+    # Carregar o registro de arquivos já processados
+    processed_files_record = load_processed_files()
+    
     # Verificar se já existe um banco de dados persistente
-    if os.path.exists("./chroma_db_semantic") and os.path.isdir("./chroma_db_semantic"):
-        print("Carregando base de dados vetorial existente...")
-        embeddings = HuggingFaceEmbeddings(
-            model_name="intfloat/multilingual-e5-base")
-        vectorstore = Chroma(persist_directory="./chroma_db_semantic",
-                             embedding_function=embeddings)
+    if os.path.exists(CHROMA_DB_DIR) and os.path.isdir(CHROMA_DB_DIR):
+        print(f"Carregando base de dados vetorial existente de {CHROMA_DB_DIR}...")
+        embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL)
+        vectorstore = Chroma(persist_directory=CHROMA_DB_DIR, embedding_function=embeddings)
         # Pulando processamento de documentos, pois já temos vetores persistidos
-        print("Base de dados existente carregada. Pulando processamento de documentos.")
+        print(f"Base de dados existente carregada. Registro tem {len(processed_files_record)} arquivos.")
         
     else:
         # Carregando documentos de múltiplas pastas
         print("Carregando documentos de múltiplas pastas...")
         documentos = []
+        
+        # Novo registro de arquivos processados que será usado para atualizar o arquivo JSON
+        novo_registro = {}
         
         for base_path in base_paths:
             if os.path.exists(base_path) and os.path.isdir(base_path):
@@ -79,6 +117,12 @@ try:
                 docs_pasta = loader.load()
                 documentos.extend(docs_pasta)
                 print(f"  - Carregados {len(docs_pasta)} documentos desta pasta")
+                
+                # Calcular hash de cada arquivo carregado e adicionar ao novo registro
+                for doc in docs_pasta:
+                    file_path = doc.metadata.get('source')
+                    if file_path:
+                        novo_registro[file_path] = calculate_file_hash(file_path)
             else:
                 print(f"Aviso: Pasta não encontrada: {base_path}")
         
@@ -93,7 +137,7 @@ try:
         
         # Instanciar o chunker semântico
         chunker = E5SemanticChunker(
-            model_name="intfloat/multilingual-e5-base",
+            model_name=EMBEDDING_MODEL,
             similarity_threshold=0.7,  # Ajuste conforme necessário para seu conteúdo
             max_tokens_per_chunk=700,
             min_tokens_per_chunk=100,
@@ -104,7 +148,8 @@ try:
         
         # Processar cada documento separadamente
         for i, documento in enumerate(documentos):
-            print(f"Processando documento {i+1}/{len(documentos)}: {documento.metadata.get('source', 'unknown')}")
+            source = documento.metadata.get('source', 'unknown')
+            print(f"Processando documento {i+1}/{len(documentos)}: {source}")
             
             # Chunk o conteúdo do documento
             doc_chunks = chunker.chunk_text(documento.page_content)
@@ -114,11 +159,12 @@ try:
                 doc = Document(
                     page_content=chunk_text,
                     metadata={
-                        'source': documento.metadata.get('source', 'unknown'),
+                        'source': source,
                         'chunk_id': f"{i}_{j}",
                         'doc_id': i,
                         'chunk_idx': j,
-                        'total_chunks': len(doc_chunks)
+                        'total_chunks': len(doc_chunks),
+                        'processed_date': datetime.now().isoformat()  # Adicionando data de processamento
                     }
                 )
                 processed_chunks.append(doc)
@@ -127,16 +173,20 @@ try:
         print(f"Processados {len(chunks)} chunks para indexação")
         
         # Crie embeddings e armazene em uma base vetorial
-        print("Criando nova base de dados vetorial...")
-        embeddings = HuggingFaceEmbeddings(
-            model_name="intfloat/multilingual-e5-base")
+        print(f"Criando nova base de dados vetorial em {CHROMA_DB_DIR}...")
+        embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL)
         
         # Criar a base vetorial e persistir
         vectorstore = Chroma.from_documents(
             documents=chunks,
             embedding=embeddings,
-            persist_directory="./chroma_db_semantic"
+            persist_directory=CHROMA_DB_DIR
         )
+        
+        # Salvar o novo registro de arquivos processados
+        print(f"Salvando registro de {len(novo_registro)} arquivos processados...")
+        save_processed_files(novo_registro)
+        print(f"Registro salvo em {PROCESSED_FILES_RECORD}")
 
     # Configure o retrievador usando MMR para buscar documentos relevantes e diversos
     retriever = vectorstore.as_retriever(
@@ -150,8 +200,30 @@ try:
 
     # Template de prompt personalizado
     template = """
-    Você é um especialista em analisar e extrair informações de documentos. Trabalhe de forma detalhada
-    com os documentos fornecidos como contexto para responder às perguntas.
+    Você é um assistente IA especializado em análise de documentos das empresas CEITEC, IMBEL e TELEBRAS. Sua função é fornecer informações precisas e contextualizadas com base nos documentos fornecidos.
+
+INSTRUÇÕES GERAIS:
+1. Analise cuidadosamente o contexto e a pergunta para identificar o tipo de informação solicitada e o provável perfil do usuário.
+2. Use principalmente as informações fornecidas no contexto para responder à pergunta.
+3. Seja específico e cite fontes quando possível, incluindo referências a documentos específicos.
+4. Quando os documentos contiverem diferentes perspectivas sobre o mesmo assunto, apresente essas diferentes visões.
+
+ADAPTAÇÃO POR PERFIL DE USUÁRIO:
+- Para consultas técnicas sobre semicondutores, chips ou tecnologia: Use linguagem técnica específica do setor, mencione especificações precisas e padrões relevantes.
+- Para consultas gerais: Use linguagem acessível e forneça explicações contextuais para termos técnicos.
+
+FORMATO DA RESPOSTA:
+- Para consultas informativas: Estruture a resposta em parágrafos organizados, começando pelos pontos mais relevantes.
+- Para consultas numéricas ou financeiras: Use listas ou tabelas quando apropriado, destacando valores e métricas importantes.
+- Para consultas comparativas: Organize a resposta em seções que contrastem os diferentes aspectos ou empresas.
+- Para consultas técnicas: Inicie com um resumo conciso e depois detalhe os aspectos técnicos.
+- Para consultas históricas: Apresente os eventos em ordem cronológica, destacando datas importantes.
+
+REGRAS ESPECÍFICAS:
+1. Se a informação não estiver explicitamente disponível no contexto, indique isso claramente e sugira onde o usuário poderia buscar mais informações.
+2. Nunca invente informações ou extrapole além do que está disponível nos documentos fornecidos.
+3. Se a pergunta for ambígua, esclareça quais aspectos você está abordando na resposta.
+4. Para informações financeiras ou governamentais, especifique sempre a data ou período a que se referem os dados.
     
     Contexto: {context}
             

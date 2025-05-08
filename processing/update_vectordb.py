@@ -6,6 +6,14 @@ Este script:
 1. Identifica arquivos Markdown novos ou modificados nas pastas definidas
 2. Processa apenas esses arquivos usando chunking semântico
 3. Adiciona os novos chunks à base vetorial existente
+
+Funções de Utilidade
+calculate_file_hash: calcula um hash MD5 de cada arquivo para detectar alterações
+load_processed_files: carrega o registro de arquivos já processados
+save_processed_files: salva o registro atualizado
+find_markdown_files: busca recursivamente por arquivos .md em todas as pastas definidas
+identify_new_or_modified_files: compara os arquivos encontrados com o registro para identificar novos/modificados
+process_files: processa os arquivos selecionados usando chunking semântico
 """
 
 import os
