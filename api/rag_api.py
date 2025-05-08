@@ -78,15 +78,15 @@ if "DEEPSEEK_API_KEY" not in os.environ:
 try:
     # Definir os caminhos para busca de documentos
     base_paths = [
-        # '/mnt/data02/MGI/projetoscid/060 Sites Institucionais CEITEC',
-        # '/mnt/data02/MGI/projetoscid/061 Sites Institucionais IMBEL',
-        # '/mnt/data02/MGI/projetoscid/062 Sites Institucionais Telebras',
-        # '/mnt/data02/MGI/projetoscid/070 Artigos Científicos',
+        '/mnt/data02/MGI/projetoscid/060 Sites Institucionais CEITEC',
+        '/mnt/data02/MGI/projetoscid/061 Sites Institucionais IMBEL',
+        '/mnt/data02/MGI/projetoscid/062 Sites Institucionais Telebras',
+        '/mnt/data02/MGI/projetoscid/070 Artigos Científicos',
         '/mnt/data02/MGI/projetoscid/080 Transparência',
-        # '/mnt/data02/MGI/projetoscid/090 Prompts e Scripts',
+        '/mnt/data02/MGI/projetoscid/090 Prompts e Scripts',
         '/mnt/data02/MGI/projetoscid/091 Notícias Ceitec'
-        # '/mnt/data02/MGI/projetoscid/092 Notícias Imbel',
-        # '/mnt/data02/MGI/projetoscid/093 Notícias Telebras'
+        '/mnt/data02/MGI/projetoscid/092 Notícias Imbel',
+        '/mnt/data02/MGI/projetoscid/093 Notícias Telebras'
     ]
     
     # Carregar o registro de arquivos já processados

@@ -21,6 +21,7 @@ import sys
 import json
 import hashlib
 import time
+import sqlite3
 from typing import List, Dict, Any, Set, Tuple
 from pathlib import Path
 from dotenv import load_dotenv
@@ -56,15 +57,15 @@ EMBEDDING_MODEL = "intfloat/multilingual-e5-base"
 
 # Definir os caminhos para busca de documentos (igual ao rag_api.py)
 base_paths = [
-    # '/mnt/data02/MGI/projetoscid/060 Sites Institucionais CEITEC',
-    # '/mnt/data02/MGI/projetoscid/061 Sites Institucionais IMBEL',
-    # '/mnt/data02/MGI/projetoscid/062 Sites Institucionais Telebras',
-    # '/mnt/data02/MGI/projetoscid/070 Artigos Científicos',
+    '/mnt/data02/MGI/projetoscid/060 Sites Institucionais CEITEC',
+    '/mnt/data02/MGI/projetoscid/061 Sites Institucionais IMBEL',
+    '/mnt/data02/MGI/projetoscid/062 Sites Institucionais Telebras',
+    '/mnt/data02/MGI/projetoscid/070 Artigos Científicos',
     '/mnt/data02/MGI/projetoscid/080 Transparência',
-    # '/mnt/data02/MGI/projetoscid/090 Prompts e Scripts',
+    '/mnt/data02/MGI/projetoscid/090 Prompts e Scripts',
     '/mnt/data02/MGI/projetoscid/091 Notícias Ceitec',
-    # '/mnt/data02/MGI/projetoscid/092 Notícias Imbel',
-    # '/mnt/data02/MGI/projetoscid/093 Notícias Telebras'
+    '/mnt/data02/MGI/projetoscid/092 Notícias Imbel',
+    '/mnt/data02/MGI/projetoscid/093 Notícias Telebras'
 ]
 
 def calculate_file_hash(file_path: str) -> str:
@@ -76,15 +77,87 @@ def calculate_file_hash(file_path: str) -> str:
     return hash_md5.hexdigest()
 
 def load_processed_files() -> Dict[str, str]:
-    """Carrega o registro de arquivos processados."""
+    """
+    Carrega o registro de arquivos processados.
+    Se o registro não existir ou estiver vazio, tenta extrair as fontes do banco ChromaDB.
+    """
+    # Primeiro, tenta carregar o registro JSON existente
     if os.path.exists(PROCESSED_FILES_RECORD):
         try:
             with open(PROCESSED_FILES_RECORD, 'r', encoding='utf-8') as f:
-                return json.load(f)
+                processed_files = json.load(f)
+                if processed_files:  # Se não estiver vazio
+                    print(f"Registro carregado do arquivo JSON: {len(processed_files)} entradas")
+                    return processed_files
         except json.JSONDecodeError:
-            print(f"Erro ao ler arquivo de registro. Criando novo registro.")
-            return {}
-    return {}
+            print(f"Erro ao ler arquivo de registro JSON. Tentando extrair do ChromaDB.")
+    
+    # Se chegamos aqui, o arquivo não existe, está vazio ou corrompido
+    # Tentar extrair as fontes diretamente do banco de dados ChromaDB
+    processed_files = {}
+    db_path = os.path.join(CHROMA_DB_DIR, "chroma.sqlite3")
+    
+    if os.path.exists(db_path):
+        print(f"Extraindo fontes do banco de dados ChromaDB em {db_path}")
+        try:
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
+            
+            # Primeiro, vamos verificar quais tabelas e colunas existem no banco
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+            tables = cursor.fetchall()
+            print(f"Tabelas encontradas: {[t[0] for t in tables]}")
+            
+            # Verificar estrutura da tabela embeddings
+            try:
+                cursor.execute("PRAGMA table_info(embeddings)")
+                columns = cursor.fetchall()
+                column_names = [col[1] for col in columns]
+                print(f"Colunas na tabela embeddings: {column_names}")
+                
+                # Identificar a coluna que contém os metadados
+                if "document" in column_names:
+                    # Consultar a tabela embeddings para obter os documentos que contêm metadados
+                    cursor.execute("SELECT document FROM embeddings")
+                    rows = cursor.fetchall()
+                    
+                    # Processar os resultados
+                    count = 0
+                    for row in rows:
+                        try:
+                            # O documento está armazenado como JSON
+                            document = json.loads(row[0])
+                            if 'metadata' in document and 'source' in document['metadata']:
+                                source_path = document['metadata']['source']
+                                # Verificar se o arquivo ainda existe
+                                if os.path.exists(source_path):
+                                    if source_path not in processed_files:
+                                        file_hash = calculate_file_hash(source_path)
+                                        processed_files[source_path] = file_hash
+                                        count += 1
+                                        if count % 50 == 0:
+                                            print(f"Adicionados {count} arquivos ao registro...")
+                        except (json.JSONDecodeError, KeyError) as e:
+                            continue  # Ignora entradas com documento inválido
+                else:
+                    print("Coluna 'document' não encontrada na tabela embeddings")
+            except sqlite3.Error as e:
+                print(f"Erro ao verificar estrutura da tabela embeddings: {e}")
+            
+            conn.close()
+            print(f"Extraídas {len(processed_files)} fontes únicas do banco de dados")
+            
+            # Salvar o registro reconstruído para uso futuro
+            if processed_files:
+                save_processed_files(processed_files)
+                print(f"Registro reconstruído salvo em {PROCESSED_FILES_RECORD}")
+                
+        except sqlite3.Error as e:
+            print(f"Erro ao acessar o banco de dados SQLite: {e}")
+    else:
+        print(f"Banco de dados ChromaDB não encontrado em {db_path}")
+    
+    return processed_files
 
 def save_processed_files(processed_files: Dict[str, str]) -> None:
     """Salva o registro de arquivos processados."""
