@@ -81,7 +81,9 @@ try:
         '/mnt/data02/MGI/projetoscid/060 Sites Institucionais CEITEC',
         '/mnt/data02/MGI/projetoscid/061 Sites Institucionais IMBEL',
         '/mnt/data02/MGI/projetoscid/062 Sites Institucionais Telebras',
-        '/mnt/data02/MGI/projetoscid/070 Artigos Científicos',
+        '/mnt/data02/MGI/projetoscid/070 Artigos Científicos CEITEC',
+        '/mnt/data02/MGI/projetoscid/071 Artigos Científicos IMBEL',
+        '/mnt/data02/MGI/projetoscid/072 Artigos Científicos Telebras',
         '/mnt/data02/MGI/projetoscid/080 Transparência',
         '/mnt/data02/MGI/projetoscid/090 Prompts e Scripts',
         '/mnt/data02/MGI/projetoscid/091 Notícias Ceitec'
