@@ -5,7 +5,6 @@ build/
 dist/
 wheels/
 data/
-data2/
 *.egg-info
 chroma_db_semantic/
 telebras_data_docs/
