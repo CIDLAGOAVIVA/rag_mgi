@@ -24,6 +24,12 @@ import time
 from typing import List, Dict, Any, Set, Tuple
 from pathlib import Path
 from dotenv import load_dotenv
+
+# Adicionar o diretório raiz do projeto ao path ANTES da importação local
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
 from datetime import datetime
 
 # Imports do LangChain
@@ -32,7 +38,7 @@ from langchain_community.vectorstores import Chroma
 from langchain_community.document_loaders import TextLoader
 from langchain_core.documents import Document
 
-# Imports do processador semântico
+# Imports do processador semântico (agora o path está correto)
 from processing.semantic_chunker import E5SemanticChunker
 
 # Carregar variáveis de ambiente

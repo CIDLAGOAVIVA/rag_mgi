@@ -7,7 +7,7 @@ wheels/
 data/
 *.egg-info
 chroma_db_semantic/
-telebras_data_docs/
+chroma_db_semantic-2/
 *.md
 *.pickle
 *.sqlite3
