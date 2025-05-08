@@ -78,15 +78,15 @@ if "DEEPSEEK_API_KEY" not in os.environ:
 try:
     # Definir os caminhos para busca de documentos
     base_paths = [
-        '/mnt/data02/MGI/projetoscid/060 Sites Institucionais CEITEC',
-        '/mnt/data02/MGI/projetoscid/061 Sites Institucionais IMBEL',
-        '/mnt/data02/MGI/projetoscid/062 Sites Institucionais Telebras',
-        '/mnt/data02/MGI/projetoscid/070 Artigos Científicos',
+        # '/mnt/data02/MGI/projetoscid/060 Sites Institucionais CEITEC',
+        # '/mnt/data02/MGI/projetoscid/061 Sites Institucionais IMBEL',
+        # '/mnt/data02/MGI/projetoscid/062 Sites Institucionais Telebras',
+        # '/mnt/data02/MGI/projetoscid/070 Artigos Científicos',
         '/mnt/data02/MGI/projetoscid/080 Transparência',
-        '/mnt/data02/MGI/projetoscid/090 Prompts e Scripts',
-        '/mnt/data02/MGI/projetoscid/091 Notícias Ceitec',
-        '/mnt/data02/MGI/projetoscid/092 Notícias Imbel',
-        '/mnt/data02/MGI/projetoscid/093 Notícias Telebras'
+        # '/mnt/data02/MGI/projetoscid/090 Prompts e Scripts',
+        '/mnt/data02/MGI/projetoscid/091 Notícias Ceitec'
+        # '/mnt/data02/MGI/projetoscid/092 Notícias Imbel',
+        # '/mnt/data02/MGI/projetoscid/093 Notícias Telebras'
     ]
     
     # Carregar o registro de arquivos já processados
@@ -97,7 +97,28 @@ try:
         print(f"Carregando base de dados vetorial existente de {CHROMA_DB_DIR}...")
         embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL)
         vectorstore = Chroma(persist_directory=CHROMA_DB_DIR, embedding_function=embeddings)
-        # Pulando processamento de documentos, pois já temos vetores persistidos
+        
+        # Se o registro de arquivos estiver vazio ou não existir, procurar e registrar os arquivos existentes
+        if len(processed_files_record) == 0:
+            print("Registro de arquivos processados vazio ou inexistente. Criando registro...")
+            novo_registro = {}
+            
+            # Verificar todos os arquivos existentes nas pastas
+            for base_path in base_paths:
+                if os.path.exists(base_path) and os.path.isdir(base_path):
+                    print(f"Escaneando documentos em: {base_path}")
+                    # Usamos apenas o escaneamento sem carregar o conteúdo completo
+                    for root, _, files in os.walk(base_path):
+                        for file in files:
+                            if file.endswith('.md'):
+                                file_path = os.path.join(root, file)
+                                novo_registro[file_path] = calculate_file_hash(file_path)
+            
+            # Salvar o registro de arquivos
+            print(f"Salvando registro de {len(novo_registro)} arquivos existentes...")
+            save_processed_files(novo_registro)
+            processed_files_record = novo_registro  # Atualizar o registro em memória
+        
         print(f"Base de dados existente carregada. Registro tem {len(processed_files_record)} arquivos.")
         
     else:

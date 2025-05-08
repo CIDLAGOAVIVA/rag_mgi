@@ -16,6 +16,7 @@ chroma_db_semantic-2/
 # Temporary files and directories
 apaga_duplicata_raw_processed.py
 rascunho.py
+processed_files.json
 
 # Virtual environments
 .venv

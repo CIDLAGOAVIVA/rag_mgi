@@ -54,25 +54,45 @@ rag_empresas/
 
 rag_mgi/ 
 ├── api/
-│   └── rag_api.py # API REST (FastAPI)
+│   └── rag_api.py              # API REST (FastAPI)
 ├── chat/
-│   └── chat.py # Interface de chat (Gradio)
+│   └── chat.py                 # Interface de chat (Gradio)
 ├── processing/
-│   ├── agentic_chunker.py # Chunking semântico (Opcional)
-│   └── conversao.py # Conversor de documentos (PDF/DOCX -> MD)
+│   ├── agentic_chunker.py      # Chunking baseado em agente
+│   ├── semantic_chunker.py     # Chunker semântico E5
+│   ├── wrapper_langchain.py    # Wrapper para compatibilidade LangChain
+│   └── conversao.py            # Conversor de documentos (PDF/DOCX -> MD)
 ├── rag/
-│   └── rag_pergunta_resposta.py # Lógica RAG principal (Não usado pela API/Chat atualmente)
-├── data/ # Diretório padrão para documentos Markdown processados (verificar código)
-├── data2/ # Diretório alternativo usado em alguns scripts (verificar código)
-│   ├── raw/ # Dados brutos para conversão
-│   └── processed/ # Dados convertidos para MD
-├── chroma_db/ # Base de dados vetorial (gerada)
-├── logs/ # Logs da API e do Chat (gerados)
-├── .env # Arquivo para variáveis de ambiente (API Keys, etc.)
-├── requirements.txt # Dependências Python (pip)
-├── pyproject.toml # Configuração do projeto e dependências (uv/pip)
-├── run_api.sh # Script para iniciar a API em background
-├── run_chat.sh # Script para iniciar o Chat em background
-├── stop_services.sh # Script para parar os serviços em background
-└── README.md # Este arquivo
+│   ├── rag_pergunta_resposta.py # Lógica RAG original
+│   └── update_vectordb.py      # Atualização incremental da base vetorial
+├── data/                       # Diretório para chunks e documentos processados
+│   ├── chunks/                 # Chunks gerados
+│   ├── processed/              # Documentos processados
+│   ├── raw/                    # Documentos brutos
+│   └── summaries/              # Resumos gerados
+├── chroma_db_semantic/         # Base de dados vetorial (gerada)
+│   ├── chroma.sqlite3          # Banco SQLite da base vetorial 
+│   └── 0770f7d0-351e-4bf0-bfe7-7c5e9f0010be/ # Diretório de embeddings
+├── logs/                       # Logs dos serviços
+│   ├── api.log                 # Log da API
+│   └── chat.log                # Log do Chat
+├── .vscode/                    # Configurações do VS Code
+│   └── settings.json           # Configurações do editor
+├── .env                        # Variáveis de ambiente (API Keys, etc.)
+├── .gitignore                  # Arquivos ignorados pelo Git
+├── .python-version             # Versão Python do projeto (3.12)
+├── apaga_duplicata_raw_processed.py # Utilitário para remover duplicatas
+├── api.pid                     # PID do processo da API
+├── chat.pid                    # PID do processo do Chat
+├── estrutura.md                # Este arquivo de estrutura
+├── processed_files.json        # Registro de arquivos processados
+├── pyproject.toml              # Configuração do projeto e dependências
+├── README.md                   # Documentação
+├── requirements.txt            # Dependências Python (pip)
+├── run_api.sh                  # Script para iniciar a API em background
+├── run_chat.sh                 # Script para iniciar o Chat em background
+├── s3file.py                   # Utilitário para operações no S3
+├── stop_services.sh            # Script para parar os serviços
+├── token_analyzer.py           # Ferramenta de análise de tokens
+└── uv.lock                     # Lock file do gerenciador de pacotes uv
 
