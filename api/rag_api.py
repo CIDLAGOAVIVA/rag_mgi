@@ -92,8 +92,8 @@ try:
     retriever = vectorstore.as_retriever(
         search_type="mmr",  # Maximum Marginal Relevance
         search_kwargs={
-            "k": 5,         # Número de documentos a recuperar
-            "fetch_k": 20,  # Busca mais documentos inicialmente
+            "k": 15,         # Número de documentos a recuperar
+            "fetch_k": 50,  # Busca mais documentos inicialmente
             "lambda_mult": 0.7,  # Equilíbrio entre relevância (0) e diversidade (1)
         }
     )
@@ -140,8 +140,8 @@ REGRAS ESPECÍFICAS:
     # Configure o modelo de linguagem
     llm = ChatDeepSeek(
         model="deepseek-chat",  # ou outro modelo disponível
-        temperature=0.1,
-        max_tokens=2048,
+        temperature=1.0,
+        max_tokens=6000,
         timeout=None,
         max_retries=3,
     )

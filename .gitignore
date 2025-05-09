@@ -12,10 +12,19 @@ chroma_db_semantic/
 *.sqlite3
 *.bin
 
+# RAG secundário
+rag_2/
+api_2/
+chat_2/
+chroma_db_semantic_CEITEC/
+chroma_db_semantic_IMBEL/
+chroma_db_semantic_Telebras/
+
 # Temporary files and directories
-apaga_duplicata_raw_processed.py
-rascunho.py
 processed_files.json
+processed_files_CEITEC.json
+processed_files_IMBEL.json
+processed_files_Telebras.json
 
 # Virtual environments
 .venv

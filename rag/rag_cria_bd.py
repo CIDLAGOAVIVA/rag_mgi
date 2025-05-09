@@ -135,9 +135,9 @@ def create_vectorstore(base_paths: List[str] = None, chroma_db_dir: str = CHROMA
         # Instanciar o chunker semântico
         chunker = E5SemanticChunker(
             model_name=EMBEDDING_MODEL,
-            similarity_threshold=0.7,
-            max_tokens_per_chunk=700,
-            min_tokens_per_chunk=100,
+            similarity_threshold=0.65,
+            max_tokens_per_chunk=1500,
+            min_tokens_per_chunk=200,
             print_logging=True
         )
         
@@ -190,100 +190,6 @@ def create_vectorstore(base_paths: List[str] = None, chroma_db_dir: str = CHROMA
     except Exception as e:
         print(f"Erro ao criar banco de dados vetorial: {e}")
         raise
-
-class RAGSystem:
-    def __init__(self, chroma_db_dir: str = CHROMA_DB_DIR):
-        """
-        Inicializa o sistema RAG carregando ou criando a base vetorial conforme necessário.
-        
-        Args:
-            chroma_db_dir: Diretório da base de dados vetorial
-        """
-        try:
-            # Verificar se já existe um banco de dados persistente
-            if os.path.exists(chroma_db_dir) and os.path.isdir(chroma_db_dir):
-                print(f"Carregando base de dados vetorial existente de {chroma_db_dir}...")
-                embeddings = HuggingFaceEmbeddings(
-                    model_name=EMBEDDING_MODEL)
-                vectorstore = Chroma(
-                    persist_directory=chroma_db_dir, embedding_function=embeddings)
-            else:
-                # Se não existir, criar um novo
-                print(f"Base de dados não encontrada em {chroma_db_dir}. Criando nova base...")
-                vectorstore = create_vectorstore(chroma_db_dir=chroma_db_dir)
-
-            # Configure o retrievador usando MMR para buscar documentos relevantes e diversos
-            retriever = vectorstore.as_retriever(
-                search_type="mmr",  # Maximum Marginal Relevance
-                search_kwargs={
-                    "k": 8,
-                    "fetch_k": 30,  # Busca mais documentos inicialmente
-                    "lambda_mult": 0.6,  # Equilíbrio entre relevância e diversidade
-                }
-            )
-
-            # Template de prompt personalizado para melhorar as respostas
-            template = """
-            Você é um especialista em analisar e extrair informações de documentos acadêmicos e técnicos, principalmente dados administrativos e financeiros.
-
-            INSTRUÇÕES:
-            1. Use principalmente as informações fornecidas na FONTE para responder à pergunta.
-            2. Seja detalhado e preciso em sua resposta, mantendo um tom neutro e objetivo.
-            3. Cite informações específicas dos documentos, incluindo números, datas e fatos quando disponíveis.
-            4. Quando documentos apresentarem diferentes perspectivas sobre o mesmo assunto, mencione essas diferentes visões.
-            5. Se a informação não estiver explicitamente disponível na fonte, indique quais partes do contexto são relevantes para a pergunta, mesmo que incompletas.
-            
-            Contexto: {context}
-            
-            Pergunta: {question}
-            
-            Resposta:
-            """
-
-            PROMPT = PromptTemplate(
-                template=template,
-                input_variables=["context", "question"]
-            )
-
-            # Configure o modelo de linguagem
-            llm = ChatDeepSeek(
-                model="deepseek-chat",
-                temperature=0,
-                max_tokens=None,
-                timeout=None,
-                max_retries=3,
-            )
-
-            # Configure a chain RAG
-            self.rag_chain = RetrievalQA.from_chain_type(
-                llm=llm,
-                chain_type="stuff",
-                retriever=retriever,
-                return_source_documents=True,
-                chain_type_kwargs={"prompt": PROMPT}
-            )
-        except Exception as e:
-            print(f"Ocorreu um erro ao inicializar o sistema RAG: {e}")
-            raise
-
-    def process_query(self, query: str) -> Dict:
-        """
-        Processa uma consulta através do sistema RAG.
-        
-        Args:
-            query: Pergunta a ser respondida
-            
-        Returns:
-            Dicionário com a resposta e as fontes utilizadas
-        """
-        try:
-            response = self.rag_chain({"query": query})
-            return {
-                "answer": response["result"],
-                "sources": [doc.metadata['source'] for doc in response["source_documents"]]
-            }
-        except Exception as e:
-            raise Exception(f"Erro ao processar a consulta: {str(e)}")
 
 # Executado diretamente        
 if __name__ == "__main__":
