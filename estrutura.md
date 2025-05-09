@@ -60,7 +60,6 @@ rag_mgi/
 ├── processing/
 │   ├── agentic_chunker.py      # Chunking baseado em agente
 │   ├── semantic_chunker.py     # Chunker semântico E5
-│   ├── wrapper_langchain.py    # Wrapper para compatibilidade LangChain
 │   └── conversao.py            # Conversor de documentos (PDF/DOCX -> MD)
 ├── rag/
 │   ├── rag_pergunta_resposta.py # Lógica RAG original
