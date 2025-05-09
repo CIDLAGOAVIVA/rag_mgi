@@ -1,0 +1,295 @@
+import os
+import dotenv
+from dotenv import load_dotenv
+import sys
+import hashlib
+import json
+from datetime import datetime
+from typing import List, Dict, Optional
+
+# Importações do LangChain
+from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_community.vectorstores import Chroma
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_deepseek import ChatDeepSeek
+from langchain.chains import RetrievalQA
+from langchain_community.document_loaders import TextLoader, DirectoryLoader
+from langchain.prompts import PromptTemplate
+from langchain_core.documents import Document
+
+# Adicionar o diretório raiz do projeto ao path ANTES da importação local
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+# Importar o chunker semântico 
+from processing.semantic_chunker import E5SemanticChunker
+
+# Carregar variáveis de ambiente
+load_dotenv()
+
+# Verificar se a chave API está definida
+if "DEEPSEEK_API_KEY" not in os.environ:
+    print("Erro: Chave de API do DeepSeek não encontrada no arquivo .env")
+    sys.exit(1)
+
+# Definições e constantes
+CHROMA_DB_DIR = "./chroma_db_semantic"
+PROCESSED_FILES_RECORD = "./processed_files.json"
+EMBEDDING_MODEL = "intfloat/multilingual-e5-base"
+
+# Definir o caminho base do projeto 
+base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+data_path = os.path.join(base_path, 'data')
+
+# Caminhos padrão para documentos
+DEFAULT_BASE_PATHS = [
+    '/mnt/data02/MGI/projetoscid/060 Sites Institucionais CEITEC',
+    '/mnt/data02/MGI/projetoscid/061 Sites Institucionais IMBEL',
+    '/mnt/data02/MGI/projetoscid/062 Sites Institucionais Telebras',
+    '/mnt/data02/MGI/projetoscid/070 Artigos Científicos CEITEC',
+    '/mnt/data02/MGI/projetoscid/071 Artigos Científicos IMBEL',
+    '/mnt/data02/MGI/projetoscid/072 Artigos Científicos Telebras',
+    '/mnt/data02/MGI/projetoscid/080 Transparência',
+    '/mnt/data02/MGI/projetoscid/090 Prompts e Scripts',
+    '/mnt/data02/MGI/projetoscid/091 Notícias Ceitec',
+    '/mnt/data02/MGI/projetoscid/092 Notícias Imbel',
+    '/mnt/data02/MGI/projetoscid/093 Notícias Telebras'
+]
+
+# Funções para gerenciar o registro de arquivos processados
+def calculate_file_hash(file_path: str) -> str:
+    """Calcula o hash MD5 de um arquivo para verificar modificações."""
+    hash_md5 = hashlib.md5()
+    with open(file_path, "rb") as f:
+        for chunk in iter(lambda: f.read(4096), b""):
+            hash_md5.update(chunk)
+    return hash_md5.hexdigest()
+
+def load_processed_files() -> Dict[str, str]:
+    """Carrega o registro de arquivos processados."""
+    if os.path.exists(PROCESSED_FILES_RECORD):
+        try:
+            with open(PROCESSED_FILES_RECORD, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except json.JSONDecodeError:
+            print(f"Erro ao ler arquivo de registro. Criando novo registro.")
+            return {}
+    return {}
+
+def save_processed_files(processed_files: Dict[str, str]) -> None:
+    """Salva o registro de arquivos processados."""
+    with open(PROCESSED_FILES_RECORD, 'w', encoding='utf-8') as f:
+        json.dump(processed_files, f, ensure_ascii=False, indent=2)
+
+def create_vectorstore(base_paths: List[str] = None, chroma_db_dir: str = CHROMA_DB_DIR) -> Chroma:
+    """
+    Cria uma nova base de dados vetorial a partir dos documentos nas pastas especificadas.
+    
+    Args:
+        base_paths: Lista de caminhos de pastas para buscar documentos
+        chroma_db_dir: Diretório para salvar a base de dados vetorial
+        
+    Returns:
+        Objeto Chroma contendo a base vetorial criada
+    """
+    try:
+        # Se base_paths não for fornecido, usar caminhos padrão
+        if base_paths is None:
+            base_paths = DEFAULT_BASE_PATHS
+        
+        # Inicializar registro de arquivos
+        novo_registro = {}
+        
+        # Carregando documentos de múltiplas pastas
+        print("Carregando documentos de múltiplas pastas...")
+        documentos = []
+        
+        for base_path in base_paths:
+            if os.path.exists(base_path) and os.path.isdir(base_path):
+                print(f"Carregando documentos de: {base_path}")
+                loader = DirectoryLoader(base_path, glob="**/*.md",
+                                 loader_cls=lambda file_path: TextLoader(file_path, encoding='utf-8'), 
+                                 show_progress=True)
+                docs_pasta = loader.load()
+                documentos.extend(docs_pasta)
+                print(f"  - Carregados {len(docs_pasta)} documentos desta pasta")
+                
+                # Calcular hash de cada arquivo carregado e adicionar ao novo registro
+                for doc in docs_pasta:
+                    file_path = doc.metadata.get('source')
+                    if file_path:
+                        novo_registro[file_path] = calculate_file_hash(file_path)
+            else:
+                print(f"Aviso: Pasta não encontrada: {base_path}")
+        
+        print(f"Carregados {len(documentos)} documentos no total")
+        
+        if len(documentos) == 0:
+            print("Nenhum documento encontrado nas pastas especificadas. Verifique os caminhos.")
+            sys.exit(1)
+
+        # Processando documentos com o E5 Semantic Chunker
+        print("Processando documentos com chunking semântico...")
+        
+        # Instanciar o chunker semântico
+        chunker = E5SemanticChunker(
+            model_name=EMBEDDING_MODEL,
+            similarity_threshold=0.7,
+            max_tokens_per_chunk=700,
+            min_tokens_per_chunk=100,
+            print_logging=True
+        )
+        
+        processed_chunks = []
+        
+        # Processar cada documento separadamente
+        for i, documento in enumerate(documentos):
+            source = documento.metadata.get('source', 'unknown')
+            print(f"Processando documento {i+1}/{len(documentos)}: {source}")
+            
+            # Chunk o conteúdo do documento
+            doc_chunks = chunker.chunk_text(documento.page_content)
+            
+            # Converter os chunks em documentos LangChain
+            for j, chunk_text in enumerate(doc_chunks):
+                doc = Document(
+                    page_content=chunk_text,
+                    metadata={
+                        'source': source,
+                        'chunk_id': f"{i}_{j}",
+                        'doc_id': i,
+                        'chunk_idx': j,
+                        'total_chunks': len(doc_chunks),
+                        'processed_date': datetime.now().isoformat()
+                    }
+                )
+                processed_chunks.append(doc)
+        
+        chunks = processed_chunks
+        print(f"Processados {len(chunks)} chunks para indexação")
+        
+        # Crie embeddings e armazene em uma base vetorial
+        print(f"Criando nova base de dados vetorial em {chroma_db_dir}...")
+        embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL)
+        
+        # Criar a base vetorial e persistir
+        vectorstore = Chroma.from_documents(
+            documents=chunks,
+            embedding=embeddings,
+            persist_directory=chroma_db_dir
+        )
+        
+        # Salvar o novo registro de arquivos processados
+        print(f"Salvando registro de {len(novo_registro)} arquivos processados...")
+        save_processed_files(novo_registro)
+        print(f"Registro salvo em {PROCESSED_FILES_RECORD}")
+        
+        return vectorstore
+        
+    except Exception as e:
+        print(f"Erro ao criar banco de dados vetorial: {e}")
+        raise
+
+class RAGSystem:
+    def __init__(self, chroma_db_dir: str = CHROMA_DB_DIR):
+        """
+        Inicializa o sistema RAG carregando ou criando a base vetorial conforme necessário.
+        
+        Args:
+            chroma_db_dir: Diretório da base de dados vetorial
+        """
+        try:
+            # Verificar se já existe um banco de dados persistente
+            if os.path.exists(chroma_db_dir) and os.path.isdir(chroma_db_dir):
+                print(f"Carregando base de dados vetorial existente de {chroma_db_dir}...")
+                embeddings = HuggingFaceEmbeddings(
+                    model_name=EMBEDDING_MODEL)
+                vectorstore = Chroma(
+                    persist_directory=chroma_db_dir, embedding_function=embeddings)
+            else:
+                # Se não existir, criar um novo
+                print(f"Base de dados não encontrada em {chroma_db_dir}. Criando nova base...")
+                vectorstore = create_vectorstore(chroma_db_dir=chroma_db_dir)
+
+            # Configure o retrievador usando MMR para buscar documentos relevantes e diversos
+            retriever = vectorstore.as_retriever(
+                search_type="mmr",  # Maximum Marginal Relevance
+                search_kwargs={
+                    "k": 8,
+                    "fetch_k": 30,  # Busca mais documentos inicialmente
+                    "lambda_mult": 0.6,  # Equilíbrio entre relevância e diversidade
+                }
+            )
+
+            # Template de prompt personalizado para melhorar as respostas
+            template = """
+            Você é um especialista em analisar e extrair informações de documentos acadêmicos e técnicos, principalmente dados administrativos e financeiros.
+
+            INSTRUÇÕES:
+            1. Use principalmente as informações fornecidas na FONTE para responder à pergunta.
+            2. Seja detalhado e preciso em sua resposta, mantendo um tom neutro e objetivo.
+            3. Cite informações específicas dos documentos, incluindo números, datas e fatos quando disponíveis.
+            4. Quando documentos apresentarem diferentes perspectivas sobre o mesmo assunto, mencione essas diferentes visões.
+            5. Se a informação não estiver explicitamente disponível na fonte, indique quais partes do contexto são relevantes para a pergunta, mesmo que incompletas.
+            
+            Contexto: {context}
+            
+            Pergunta: {question}
+            
+            Resposta:
+            """
+
+            PROMPT = PromptTemplate(
+                template=template,
+                input_variables=["context", "question"]
+            )
+
+            # Configure o modelo de linguagem
+            llm = ChatDeepSeek(
+                model="deepseek-chat",
+                temperature=0,
+                max_tokens=None,
+                timeout=None,
+                max_retries=3,
+            )
+
+            # Configure a chain RAG
+            self.rag_chain = RetrievalQA.from_chain_type(
+                llm=llm,
+                chain_type="stuff",
+                retriever=retriever,
+                return_source_documents=True,
+                chain_type_kwargs={"prompt": PROMPT}
+            )
+        except Exception as e:
+            print(f"Ocorreu um erro ao inicializar o sistema RAG: {e}")
+            raise
+
+    def process_query(self, query: str) -> Dict:
+        """
+        Processa uma consulta através do sistema RAG.
+        
+        Args:
+            query: Pergunta a ser respondida
+            
+        Returns:
+            Dicionário com a resposta e as fontes utilizadas
+        """
+        try:
+            response = self.rag_chain({"query": query})
+            return {
+                "answer": response["result"],
+                "sources": [doc.metadata['source'] for doc in response["source_documents"]]
+            }
+        except Exception as e:
+            raise Exception(f"Erro ao processar a consulta: {str(e)}")
+
+# Executado diretamente        
+if __name__ == "__main__":
+    """
+    Se executado diretamente, cria a base de dados vetorial.
+    """
+    print("Criando base de dados vetorial...")
+    create_vectorstore()
+    print("Base de dados vetorial criada com sucesso!")
