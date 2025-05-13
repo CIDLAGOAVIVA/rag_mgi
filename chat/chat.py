@@ -71,7 +71,7 @@ def custom_api_response(message, history):
 def rag_chat_response(message, history):
     try:
         response = requests.post(
-            "http://localhost:8008/query",
+            "http://localhost:8010/query",
             json={"query": message}
         )
 
@@ -124,7 +124,7 @@ with gr.Blocks() as demo:
 if __name__ == "__main__":
     try:
         # Tentar portas alternativas se a 8520 estiver em uso
-        ports = [8520, 8521, 8522, 8523, 8524]
+        ports = [8520, 8521, 8522, 8523, 8524, 8525, 8526, 8527, 8528, 8529, 8530, 8531]
 
         for port in ports:
             try:
