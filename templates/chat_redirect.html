@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Redirecionando para o Chat</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f5f5f5;
+        }
+        .loader {
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #3498db;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .message {
+            text-align: center;
+            max-width: 80%;
+        }
+        .ports {
+            margin-top: 20px;
+            font-size: 0.9em;
+            color: #666;
+        }
+        .ports a {
+            margin: 0 5px;
+            color: #3498db;
+        }
+    </style>
+</head>
+<body>
+    <div class="loader"></div>
+    <div class="message">
+        <h2>Redirecionando para o Chat...</h2>
+        <p>Se não for redirecionado automaticamente, tente acessar diretamente:</p>
+    </div>
+    <div class="ports" id="portLinks">
+        <!-- Links serão adicionados via JavaScript -->
+    </div>
+
+    <script>
+        // Tentativa de redirecionamento automático
+        function tryRedirect(ports, index) {
+            if (index >= ports.length) {
+                document.querySelector('.message').innerHTML = `
+                    <h2>Não foi possível conectar ao chat</h2>
+                    <p>Por favor, tente clicar em um dos links abaixo manualmente:</p>
+                `;
+                return;
+            }
+
+            const port = ports[index];
+            const url = `http://localhost:${port}`;
+
+            // Tentar verificar se a porta está respondendo
+            fetch(url, { mode: 'no-cors', method: 'HEAD' })
+                .then(() => {
+                    window.location.href = url;
+                })
+                .catch(() => {
+                    // Tentar próxima porta após um pequeno delay
+                    setTimeout(() => {
+                        tryRedirect(ports, index + 1);
+                    }, 300);
+                });
+        }
+
+        // Criar links para todas as portas possíveis
+        const ports = [{{ chat_port }}, 8520, 8521, 8522, 8523, 8524, 8525, 8526, 8527, 8528, 8529, 8530, 8531];
+        const portLinksDiv = document.getElementById('portLinks');
+
+        ports.forEach(port => {
+            const link = document.createElement('a');
+            link.href = `http://localhost:${port}`;
+            link.textContent = `Porta ${port}`;
+            link.target = '_blank';
+            portLinksDiv.appendChild(link);
+            
+            // Adicionar separador entre os links
+            if (port !== 8531) {
+                portLinksDiv.appendChild(document.createTextNode(' | '));
+            }
+        });
+
+        // Iniciar o redirecionamento automático
+        tryRedirect(ports, 0);
+    </script>
+</body>
+</html>

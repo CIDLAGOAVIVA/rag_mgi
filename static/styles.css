@@ -1,0 +1,89 @@
+body {
+    background-color: #f8f9fa;
+}
+
+.navbar {
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.navbar-brand {
+    font-weight: bold;
+    font-size: 1.5rem;
+}
+
+.card {
+    border-radius: 10px;
+    border: none;
+}
+
+.card-header {
+    border-radius: 10px 10px 0 0 !important;
+    padding: 1rem;
+}
+
+.card-footer {
+    background-color: #f8f9fa;
+    border-radius: 0 0 10px 10px !important;
+    padding: 1rem;
+}
+
+.form-control {
+    border-radius: 5px;
+}
+
+.btn-primary {
+    border-radius: 5px;
+    padding: 0.5rem 1.5rem;
+}
+
+.alert {
+    border-radius: 5px;
+}
+
+/* Estilização específica para o chat */
+.chat-container {
+    height: 600px;
+    display: flex;
+    flex-direction: column;
+}
+
+.chat-messages {
+    flex-grow: 1;
+    overflow-y: auto;
+    padding: 1rem;
+    background-color: #f8f9fa;
+    border-radius: 10px;
+    margin-bottom: 1rem;
+}
+
+.message {
+    margin-bottom: 1rem;
+    padding: 0.75rem;
+    border-radius: 10px;
+    max-width: 80%;
+}
+
+.message-user {
+    background-color: #dcf8c6;
+    margin-left: auto;
+}
+
+.message-bot {
+    background-color: #ffffff;
+    margin-right: auto;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.chat-input {
+    display: flex;
+}
+
+.chat-input .form-control {
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+}
+
+.chat-input .btn {
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+}

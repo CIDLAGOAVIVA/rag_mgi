@@ -1,8 +1,15 @@
 import os
+import sys
 import gradio as gr
 import requests
 from dotenv import load_dotenv
 from openai import OpenAI
+
+# Adicionar o diretório raiz do projeto ao path ANTES de qualquer importação local
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+    print(f"Adicionado {project_root} ao sys.path")
 
 # Carrega variáveis de ambiente
 load_dotenv()
@@ -14,7 +21,7 @@ client = OpenAI(
     api_key=DEEPSEEK_API_KEY
 )
 
-
+# Função para resposta do DeepSeek
 def deepseek_response(message, history):
     try:
         # Iniciar com a mensagem do sistema
@@ -45,7 +52,7 @@ def deepseek_response(message, history):
         # Adicionar nova mensagem
         messages.append({"role": "user", "content": message})
 
-        print(f"Contexto atual: {len(messages)} mensagens")  # Debug
+        print(f"Contexto atual: {len(messages)} mensagens")
 
         response = client.chat.completions.create(
             model="deepseek-chat",
@@ -58,22 +65,19 @@ def deepseek_response(message, history):
         return response.choices[0].message.content
 
     except Exception as e:
-        print(f"Erro detalhado: {str(e)}")  # Debug
+        print(f"Erro detalhado: {str(e)}")
         return f"Erro ao processar a requisição: {str(e)}"
 
-
-def custom_api_response(message, history):
-    # Aqui iremos implementar a chamada à nossa API customizada
-    # Por enquanto, retornamos uma mensagem de placeholder
-    return f"API Customizada (será implementada): {message}"
-
-
+# Função para resposta do RAG
 def rag_chat_response(message, history):
     try:
+        print(f"Enviando requisição para a API RAG: {message}")
         response = requests.post(
             "http://localhost:8010/query",
-            json={"query": message}
+            json={"query": message},
+            timeout=60  # Aumentar timeout para 60 segundos
         )
+        print(f"Resposta recebida com status: {response.status_code}")
 
         if response.status_code == 200:
             data = response.json()
@@ -85,11 +89,12 @@ def rag_chat_response(message, history):
                 "\n".join([f"- {s}" for s in sources])
             return full_response
         else:
+            print(f"Erro da API RAG: {response.text}")
             return f"Erro na API: {response.status_code}"
 
     except Exception as e:
+        print(f"Erro ao conectar com a API RAG: {str(e)}")
         return f"Erro ao conectar com a API: {str(e)}"
-
 
 # Criando a interface Gradio
 with gr.Blocks() as demo:
@@ -99,12 +104,11 @@ with gr.Blocks() as demo:
     with gr.Tab("Chat DeepSeek"):
         deepseek_chatbot = gr.ChatInterface(
             deepseek_response,
-            # Adicionado type='messages'
             chatbot=gr.Chatbot(height=400, type='messages'),
             textbox=gr.Textbox(
                 placeholder="Digite sua mensagem aqui...", container=False),
             title="Chat DeepSeek",
-            type='messages'  # Adicionando o tipo explicitamente
+            type='messages'
         )
 
     with gr.Tab("Chat RAG - TELEBRAS"):
@@ -119,30 +123,40 @@ with gr.Blocks() as demo:
             type='messages'
         )
 
-    # Remove ou comente a antiga implementação do custom_chatbot
-
 if __name__ == "__main__":
     try:
-        # Tentar portas alternativas se a 8520 estiver em uso
-        ports = [8520, 8521, 8522, 8523, 8524, 8525, 8526, 8527, 8528, 8529, 8530, 8531]
-
-        for port in ports:
-            try:
-                print(f"Tentando iniciar o servidor na porta {port}...")
-                demo.launch(
-                    share=False,
-                    server_name="0.0.0.0",
-                    server_port=port,
-                    show_error=True
-                )
-                break  # Se chegou aqui, o servidor iniciou com sucesso
-            except OSError as e:
-                if port == ports[-1]:  # Se for a última porta da lista
-                    raise OSError(
-                        f"Não foi possível encontrar uma porta disponível entre {ports[0]} e {ports[-1]}")
-                print(f"Porta {port} em uso, tentando próxima porta...")
-                continue
-
+        # Obter a porta da variável de ambiente
+        port = int(os.environ.get("PORT", os.environ.get("CHAT_PORT", 8525)))
+        
+        print(f"\n====== INICIANDO SERVIDOR CHAT NA PORTA: {port} ======\n")
+        
+        # Tentar iniciar na porta especificada
+        try:
+            demo.launch(
+                share=False,
+                server_name="0.0.0.0",
+                server_port=port,
+                show_error=True
+            )
+        except OSError as e:
+            print(f"ERRO ao iniciar na porta {port}: {e}")
+            
+            # Tentar portas alternativas se a especificada falhar
+            for alt_port in range(8520, 8532):
+                if alt_port != port:
+                    try:
+                        print(f"Tentando porta alternativa {alt_port}...")
+                        demo.launch(
+                            share=False,
+                            server_name="0.0.0.0",
+                            server_port=alt_port,
+                            show_error=True
+                        )
+                        print(f"\n====== SERVIDOR INICIADO NA PORTA: {alt_port} ======\n")
+                        break
+                    except OSError:
+                        continue
+    
     except Exception as e:
-        print(f"Erro ao iniciar o servidor: {str(e)}")
-        raise
+        print(f"Erro fatal ao iniciar o servidor: {str(e)}")
+        sys.exit(1)

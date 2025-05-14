@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block title %}Registrar - RAG MGI{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white">
+                <h4 class="mb-0">Criar Nova Conta</h4>
+            </div>
+            <div class="card-body">
+                {% if errors %}
+                <div class="alert alert-danger">
+                    <h5>Corrija os seguintes erros:</h5>
+                    <ul class="mb-0">
+                        {% for field, message in errors.items() %}
+                        <li>{{ message }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+
+                <form method="post" action="/register">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="first_name" class="form-label">Nome</label>
+                            <input type="text" class="form-control" id="first_name" name="first_name" value="{{ data.first_name or '' }}">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="last_name" class="form-label">Sobrenome</label>
+                            <input type="text" class="form-control" id="last_name" name="last_name" value="{{ data.last_name or '' }}">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="username" class="form-label">Nome de Usuário <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control {% if 'username' in errors %}is-invalid{% endif %}"
+                               id="username" name="username" required value="{{ data.username or '' }}">
+                        <div class="form-text">Use apenas letras, números e underscores (3-20 caracteres).</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="email" class="form-label">Email <span class="text-danger">*</span></label>
+                        <input type="email" class="form-control {% if 'email' in errors %}is-invalid{% endif %}"
+                               id="email" name="email" required value="{{ data.email or '' }}">
+                    </div>
+                    <div class="mb-3">
+                        <label for="password" class="form-label">Senha <span class="text-danger">*</span></label>
+                        <input type="password" class="form-control {% if 'password' in errors %}is-invalid{% endif %}"
+                               id="password" name="password" required>
+                        <div class="form-text">
+                            A senha deve ter pelo menos 8 caracteres, incluindo uma letra maiúscula,
+                            uma letra minúscula e um número.
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="password2" class="form-label">Confirmar Senha <span class="text-danger">*</span></label>
+                        <input type="password" class="form-control {% if 'password2' in errors %}is-invalid{% endif %}"
+                               id="password2" name="password2" required>
+                    </div>
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary">Registrar</button>
+                    </div>
+                </form>
+            </div>
+            <div class="card-footer text-center">
+                <p class="mb-0">Já tem uma conta? <a href="/login">Entre aqui</a></p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
