@@ -34,8 +34,8 @@ if "DEEPSEEK_API_KEY" not in os.environ:
     sys.exit(1)
 
 # Definições e constantes
-CHROMA_DB_DIR = "./chroma_db_semantic"
-PROCESSED_FILES_RECORD = "./processed_files.json"
+CHROMA_DB_DIR_IMBEL = "./chroma_db_semantic_IMBEL"
+PROCESSED_FILES_RECORD_IMBEL = "./processed_files_IMBEL.json"
 EMBEDDING_MODEL = "intfloat/multilingual-e5-base"
 
 # Definir o caminho base do projeto 
@@ -43,18 +43,11 @@ base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 data_path = os.path.join(base_path, 'data')
 
 # Caminhos padrão para documentos
-DEFAULT_BASE_PATHS = [
-    '/mnt/data02/MGI/projetoscid/060 Sites Institucionais CEITEC',
+DEFAULT_BASE_PATHS_IMBEL = [
     '/mnt/data02/MGI/projetoscid/061 Sites Institucionais IMBEL',
-    '/mnt/data02/MGI/projetoscid/062 Sites Institucionais Telebras',
-    '/mnt/data02/MGI/projetoscid/070 Artigos Científicos CEITEC',
     '/mnt/data02/MGI/projetoscid/071 Artigos Científicos IMBEL',
-    '/mnt/data02/MGI/projetoscid/072 Artigos Científicos Telebras',
-    '/mnt/data02/MGI/projetoscid/080 Transparência',
     '/mnt/data02/MGI/projetoscid/090 Prompts e Scripts',
-    '/mnt/data02/MGI/projetoscid/091 Notícias Ceitec',
-    '/mnt/data02/MGI/projetoscid/092 Notícias Imbel',
-    '/mnt/data02/MGI/projetoscid/093 Notícias Telebras'
+    '/mnt/data02/MGI/projetoscid/092 Notícias Imbel'
 ]
 
 # Funções para gerenciar o registro de arquivos processados
@@ -68,9 +61,9 @@ def calculate_file_hash(file_path: str) -> str:
 
 def load_processed_files() -> Dict[str, str]:
     """Carrega o registro de arquivos processados."""
-    if os.path.exists(PROCESSED_FILES_RECORD):
+    if os.path.exists(PROCESSED_FILES_RECORD_IMBEL):
         try:
-            with open(PROCESSED_FILES_RECORD, 'r', encoding='utf-8') as f:
+            with open(PROCESSED_FILES_RECORD_IMBEL, 'r', encoding='utf-8') as f:
                 return json.load(f)
         except json.JSONDecodeError:
             print(f"Erro ao ler arquivo de registro. Criando novo registro.")
@@ -79,10 +72,10 @@ def load_processed_files() -> Dict[str, str]:
 
 def save_processed_files(processed_files: Dict[str, str]) -> None:
     """Salva o registro de arquivos processados."""
-    with open(PROCESSED_FILES_RECORD, 'w', encoding='utf-8') as f:
+    with open(PROCESSED_FILES_RECORD_IMBEL, 'w', encoding='utf-8') as f:
         json.dump(processed_files, f, ensure_ascii=False, indent=2)
 
-def create_vectorstore(base_paths: List[str] = None, chroma_db_dir: str = CHROMA_DB_DIR) -> Chroma:
+def create_vectorstore(base_paths: List[str] = None, chroma_db_dir: str = CHROMA_DB_DIR_IMBEL) -> Chroma:
     """
     Cria uma nova base de dados vetorial a partir dos documentos nas pastas especificadas.
     
@@ -96,7 +89,7 @@ def create_vectorstore(base_paths: List[str] = None, chroma_db_dir: str = CHROMA
     try:
         # Se base_paths não for fornecido, usar caminhos padrão
         if base_paths is None:
-            base_paths = DEFAULT_BASE_PATHS
+            base_paths = DEFAULT_BASE_PATHS_IMBEL
         
         # Inicializar registro de arquivos
         novo_registro = {}
@@ -137,7 +130,7 @@ def create_vectorstore(base_paths: List[str] = None, chroma_db_dir: str = CHROMA
             model_name=EMBEDDING_MODEL,
             similarity_threshold=0.65,
             max_tokens_per_chunk=700,
-            min_tokens_per_chunk=200,
+            min_tokens_per_chunk=100,
             print_logging=True
         )
         
@@ -183,7 +176,7 @@ def create_vectorstore(base_paths: List[str] = None, chroma_db_dir: str = CHROMA
         # Salvar o novo registro de arquivos processados
         print(f"Salvando registro de {len(novo_registro)} arquivos processados...")
         save_processed_files(novo_registro)
-        print(f"Registro salvo em {PROCESSED_FILES_RECORD}")
+        print(f"Registro salvo em {PROCESSED_FILES_RECORD_IMBEL}")
         
         return vectorstore
         
