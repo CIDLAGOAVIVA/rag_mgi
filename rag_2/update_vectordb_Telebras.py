@@ -53,7 +53,7 @@ if "DEEPSEEK_API_KEY" not in os.environ:
 # Configurações
 CHROMA_DB_DIR_TELEBRAS = "./chroma_db_semantic_Telebras"
 PROCESSED_FILES_RECORD = "./processed_files.json"
-EMBEDDING_MODEL = "intfloat/multilingual-e5-base"
+EMBEDDING_MODEL = "intfloat/multilingual-e5-large"
 
 # Definir os caminhos para busca de documentos (igual ao rag_api.py)
 base_paths = [
@@ -261,7 +261,7 @@ def main():
     chunker = E5SemanticChunker(
         model_name=EMBEDDING_MODEL,
         similarity_threshold=0.7,
-        max_tokens_per_chunk=700,
+        max_tokens_per_chunk=1000,
         min_tokens_per_chunk=100,
         print_logging=False
     )

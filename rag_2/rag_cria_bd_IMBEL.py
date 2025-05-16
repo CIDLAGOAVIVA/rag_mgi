@@ -36,7 +36,7 @@ if "DEEPSEEK_API_KEY" not in os.environ:
 # Definições e constantes
 CHROMA_DB_DIR_IMBEL = "./chroma_db_semantic_IMBEL"
 PROCESSED_FILES_RECORD_IMBEL = "./processed_files_IMBEL.json"
-EMBEDDING_MODEL = "intfloat/multilingual-e5-base"
+EMBEDDING_MODEL = "intfloat/multilingual-e5-large"
 
 # Definir o caminho base do projeto 
 base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -129,7 +129,7 @@ def create_vectorstore(base_paths: List[str] = None, chroma_db_dir: str = CHROMA
         chunker = E5SemanticChunker(
             model_name=EMBEDDING_MODEL,
             similarity_threshold=0.65,
-            max_tokens_per_chunk=700,
+            max_tokens_per_chunk=1000,
             min_tokens_per_chunk=100,
             print_logging=True
         )

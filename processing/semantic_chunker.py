@@ -8,16 +8,16 @@ from tqdm import tqdm
 
 class E5SemanticChunker:
     """
-    Uma implementação de Semantic Chunker usando o modelo multilingual-e5-base.
+    Uma implementação de Semantic Chunker usando o modelo multilingual-e5-large.
     Esta classe divide textos em chunks com base na similaridade semântica,
     utilizando embeddings do modelo de sentence transformers.
     """
     
     def __init__(
         self, 
-        model_name: str = "intfloat/multilingual-e5-base",
+        model_name: str = "intfloat/multilingual-e5-large",
         similarity_threshold: float = 0.6,
-        max_tokens_per_chunk: int = 700,
+        max_tokens_per_chunk: int = 1000,
         min_tokens_per_chunk: int = 100,
         print_logging: bool = False
     ):
@@ -309,7 +309,7 @@ class E5SemanticChunker:
 if __name__ == "__main__":
     chunker = E5SemanticChunker(
         similarity_threshold=0.7,
-        max_tokens_per_chunk=700,
+        max_tokens_per_chunk=1000,
         min_tokens_per_chunk=100,
         print_logging=True
     )
