@@ -7,7 +7,6 @@ wheels/
 data/
 *.egg-info
 chroma_db_semantic/
-*.md
 *.pickle
 *.sqlite3
 *.bin
@@ -16,6 +15,7 @@ chroma_db_semantic/
 # rag_2/
 # api_2/
 # chat_2/
+MCP-materiais/
 chroma_db_semantic_CEITEC/
 chroma_db_semantic_IMBEL/
 chroma_db_semantic_Telebras/

@@ -36,7 +36,7 @@ if "DEEPSEEK_API_KEY" not in os.environ:
 # Definições e constantes
 CHROMA_DB_DIR_CEITEC = "./chroma_db_semantic_CEITEC"
 PROCESSED_FILES_RECORD_CEITEC = "./processed_files_CEITEC.json"
-EMBEDDING_MODEL = "intfloat/e5-mistral-7b-instruct"
+EMBEDDING_MODEL = "intfloat/multilingual-e5-large"
 
 # Definir o caminho base do projeto 
 base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

@@ -214,7 +214,6 @@ def imbel_overview() -> dict:
     return {
         "name": "IMBEL",
         "full_name": "Indústria de Material Bélico do Brasil",
-        "founded": "1975", # Fundada em
         "headquarters": "Brasília, DF, Brasil", # Sede
         "industry": "Defesa e Segurança", # Indústria
         "main_products": ["Armamentos", "Munições", "Explosivos", "Equipamentos militares"], # Principais produtos
