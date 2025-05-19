@@ -42,10 +42,17 @@ MCP_SERVERS = {
     "IMBEL": {"url": "http://localhost:8010/mcp/", "description": "Conhecimento IMBEL."}
 }
 
-async def parallel_mcp_query(query: str, max_results: int = 5) -> tuple[dict, list]:
+async def parallel_mcp_query(query: str, max_results: int = 5, target_server: str = None) -> tuple[dict, list]:
     results = {}
     errors = []
+    servers_to_query = [] # Inicializa a lista
 
+    # Se um servidor específico for solicitado, consultar apenas ele
+    if target_server and target_server in MCP_SERVERS:
+        servers_to_query = [target_server]
+    else:
+        servers_to_query = MCP_SERVERS.keys()
+        
     async def query_server(server_name: str) -> tuple[str, dict]:
         server_config = MCP_SERVERS.get(server_name)
         if not server_config:
@@ -146,7 +153,16 @@ async def parallel_mcp_query(query: str, max_results: int = 5) -> tuple[dict, li
 def create_consolidated_summary(query: str, results_dict: dict) -> str:
     logger.info(f"Criando resumo consolidado para query: '{query[:50]}...'")
     valid_responses = []
-    all_sources = []
+    all_sources_dict = {} # Initialize as a dictionary
+    
+    # Detectar se a pergunta é específica para uma empresa
+    query_lower = query.lower()
+    target_company = None
+    for company in MCP_SERVERS.keys():
+        if company.lower() in query_lower:
+            target_company = company
+            break
+        
     for server_name, result_data in results_dict.items():
         if not result_data or "error" in result_data or "content" not in result_data:
             error_info = result_data.get('error', 'Dados ausentes') if result_data else 'Nulo'
@@ -157,14 +173,29 @@ def create_consolidated_summary(query: str, results_dict: dict) -> str:
             logger.warning(f"Resposta vazia de {server_name}, ignorando.")
             continue
         valid_responses.append({"server": server_name, "answer": answer})
+        
+        # Organizar fontes por empresa
         sources = result_data["content"].get("sources", [])
         if sources:
-            for source in sources: all_sources.append(f"{server_name}: {source}")
+            all_sources_dict[server_name] = sources # Now using dictionary assignment
     if not valid_responses:
         logger.error("Nenhuma resposta válida para sintetizar.")
         return "Não foi possível obter informações relevantes."
+    
     logger.info(f"Sintetizando {len(valid_responses)} respostas...")
-    system_prompt = "Sintetize as seguintes informações de diferentes fontes (TELEBRAS, CEITEC, IMBEL) sobre empresas estatais brasileiras. Responda em português do Brasil, seja coeso, cite fontes se específico, e não invente dados."
+    
+    # Prompt para a síntese do LLM
+    system_prompt = """
+    Sintetize as seguintes informações de diferentes fontes (TELEBRAS, CEITEC, IMBEL) sobre empresas estatais brasileiras. 
+    
+    INSTRUÇÕES IMPORTANTES:
+    1. Responda em português do Brasil, seja coeso e não invente dados.
+    2. Se a pergunta for específica sobre uma única empresa, foque APENAS nessa empresa.
+    3. Evite misturar informações de empresas diferentes na mesma seção da resposta.
+    4. Para perguntas sobre finanças, utilize terminologia financeira precisa.
+    5. Para perguntas sobre projetos, estruture cronologicamente.
+    6. Cite explicitamente a empresa de origem de cada informação.
+    """
     context_str = "\n\n".join([f"FONTE {r['server']}:\n{r['answer']}" for r in valid_responses])
     user_prompt = f"PERGUNTA: {query}\n\nDADOS DAS FONTES:\n{context_str}\n\nRESPOSTA SINTETIZADA:"
     try:
@@ -173,20 +204,63 @@ def create_consolidated_summary(query: str, results_dict: dict) -> str:
             model="deepseek-chat", messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}],
-            temperature=0.2, max_tokens=3500
+            temperature=1.0, max_tokens=6000
         )
         synthesized_answer = api_response.choices[0].message.content
         logger.info(f"Síntese LLM gerada ({len(synthesized_answer)} chars).")
-        if all_sources:
-            unique_sources = sorted(list(set(all_sources)))[:10]
+        
+        # Processar o dicionário de fontes em uma lista plana para exibição
+        flat_all_sources = []
+        for server_key in all_sources_dict:
+            for source_item in all_sources_dict[server_key]:
+                flat_all_sources.append(f"{server_key}: {source_item}") # Add server prefix to source
+
+        if flat_all_sources:
+            unique_sources = sorted(list(set(flat_all_sources)))[:15]
             return f"{synthesized_answer}\n\n**Fontes:**\n" + "\n".join(f"- {s}" for s in unique_sources)
         return synthesized_answer
     except Exception as e:
         logger.error(f"Erro na síntese LLM: {e}", exc_info=True)
         fallback_answer = "**Respostas Individuais:**\n" + "\n".join(f"**{r['server']}:**\n{r['answer']}" for r in valid_responses)
-        if all_sources:
-             fallback_answer += "\n\n**Fontes:**\n" + "\n".join(f"- {s}" for s in sorted(list(set(all_sources)))[:10])
+        
+        # Processar o dicionário de fontes em uma lista plana para exibição
+        # Fallback para fontes
+        flat_all_sources_fallback = []
+        for server_key_fb in all_sources_dict:
+            for source_item_fb in all_sources_dict[server_key_fb]:
+                flat_all_sources_fallback.append(f"{server_key_fb}: {source_item_fb}")
+
+        if flat_all_sources_fallback:
+             fallback_answer += "\n\n**Fontes:**\n" + "\n".join(f"- {s}" for s in sorted(list(set(flat_all_sources_fallback)))[:10])
         return fallback_answer
+
+def detect_company_in_query(query: str) -> str:
+    """
+    Detecta se a consulta é específica para uma empresa.
+    
+    Args:
+        query: A consulta do usuário.
+        
+    Returns:
+        str: Nome da empresa detectada ou None se nenhuma for detectada.
+    """
+    query_lower = query.lower()
+    
+    # Palavras-chave específicas para cada empresa
+    company_keywords = {
+        "CEITEC": ["ceitec", "semicondutores", "chips", "circuitos integrados", "rfid"],
+        "IMBEL": ["imbel", "material bélico", "defesa", "armamentos", "munições", "explosivos"],
+        "TELEBRAS": ["telebras", "telecomunicações", "internet", "satélite", "sgdc", "banda larga"]
+    }
+    
+    # Verificar menções explícitas às empresas
+    for company, keywords in company_keywords.items():
+        for keyword in keywords:
+            if keyword in query_lower:
+                return company
+    
+    return None
+
 
 async def async_rag_mcp_response(message: str, history: list, mode: str = "aggregated") -> str:
     logger.info(f"Processando consulta (modo: {mode}): '{message[:50]}...'")
@@ -259,33 +333,55 @@ async def check_server_availability(name: str, url: str) -> tuple[bool, list[str
         return False, msg
 
 def setup_and_launch_gradio():
-    with gr.Blocks(title="Chat RAG MGI", theme=gr.themes.Soft()) as demo: # Definindo tema aqui
+    with gr.Blocks(title="Chat RAG MGI", theme=gr.themes.Soft()) as demo:
         gr.Markdown("# Chat RAG Unificado - MGI")
         gr.Markdown("Faça uma pergunta para consultar as bases de conhecimento TELEBRAS, CEITEC e IMBEL.")
         
-        gr.ChatInterface(
-            rag_aggregated_response_async,
-            chatbot=gr.Chatbot(
-                height=600, 
-                label="Chat Consolidado",
-                type='messages', # Especificar para evitar warning
-                # bubble_full_width removido pois está obsoleto
-            ),
-            textbox=gr.Textbox(placeholder="Digite sua pergunta...", container=False, scale=7),
-            # Os botões submit, clear, undo são geralmente adicionados por padrão ou configurados no Chatbot.
-            # Removendo parâmetros não suportados diretamente pelo ChatInterface.
-        )
+        with gr.Row():
+            with gr.Column(scale=7):
+                chatbot = gr.Chatbot(height=600, label="Chat Consolidado", type='messages')
+                query_input = gr.Textbox(placeholder="Digite sua pergunta...", container=False)
+            
+            with gr.Column(scale=3):
+                company_radio = gr.Radio(
+                    choices=["Todas", "TELEBRAS", "CEITEC", "IMBEL"],
+                    label="Empresa específica (opcional)",
+                    value="Todas"
+                )
+                
+                topic_radio = gr.Radio(
+                    choices=["Geral", "Finanças", "Projetos", "Produtos", "Institucional"],
+                    label="Tópico específico (opcional)",
+                    value="Geral"
+                )
         
-        # Abas específicas comentadas para o teste inicial simplificado
-        # with gr.Tab("Chat RAG - TELEBRAS"):
-        #     gr.Markdown(MCP_SERVERS["TELEBRAS"]["description"])
-        #     gr.ChatInterface(rag_telebras_response_async, chatbot=gr.Chatbot(height=400, label="TELEBRAS", type='messages'))
-        # with gr.Tab("Chat RAG - CEITEC"):
-        #     gr.Markdown(MCP_SERVERS["CEITEC"]["description"])
-        #     gr.ChatInterface(rag_ceitec_response_async, chatbot=gr.Chatbot(height=400, label="CEITEC", type='messages'))
-        # with gr.Tab("Chat RAG - IMBEL"):
-        #     gr.Markdown(MCP_SERVERS["IMBEL"]["description"])
-        #     gr.ChatInterface(rag_imbel_response_async, chatbot=gr.Chatbot(height=400, label="IMBEL", type='messages'))
+        async def process_query(message: str, history: list, company: str, topic: str):
+            # Modificar a consulta com base nas seleções
+            enhanced_query = message
+            if company != "Todas":
+                enhanced_query = f"[{company}] {enhanced_query}"
+            if topic != "Geral":
+                enhanced_query = f"[{topic}] {enhanced_query}"
+            
+            # Adiciona a mensagem do usuário ao histórico no formato correto
+            history.append({"role": "user", "content": message})
+            
+            # Await a chamada de função assíncrona
+            # Passando um histórico vazio para async_rag_mcp_response, pois ele não utiliza o histórico de chat para contexto.
+            bot_response_string = await async_rag_mcp_response(enhanced_query, [], "aggregated")
+            
+            # Adiciona a resposta do bot ao histórico no formato correto
+            history.append({"role": "assistant", "content": bot_response_string})
+            
+            # Retorna o histórico atualizado
+            return history
+        
+        submit_btn = gr.Button("Enviar")
+        submit_btn.click(
+            process_query,
+            inputs=[query_input, chatbot, company_radio, topic_radio],
+            outputs=chatbot
+        )
 
     env_port = os.getenv("GRADIO_SERVER_PORT")
     port_to_use = 0

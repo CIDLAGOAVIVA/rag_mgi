@@ -31,7 +31,7 @@ from fastmcp import FastMCP, Context
 
 # Definir as constantes de configuração
 CHROMA_DB_DIR_CEITEC = "./chroma_db_semantic_CEITEC"
-EMBEDDING_MODEL = "intfloat/multilingual-e5-base" # Modelo de embedding
+EMBEDDING_MODEL = "intfloat/multilingual-e5-large" # Modelo de embedding
 
 async def initialize_vectorstore():
     try:
@@ -82,9 +82,12 @@ def initialize_rag_chain(vectorstore):
 
     INSTRUÇÕES GERAIS:
     1. Analise cuidadosamente o contexto e a pergunta para identificar o tipo de informação solicitada.
-    2. Use principalmente as informações fornecidas no contexto para responder à pergunta.
+    2. Use EXCLUSIVAMENTE as informações fornecidas no contexto para responder à pergunta.
     3. Seja específico e cite fontes quando possível, incluindo referências a documentos específicos.
-    4. Quando os documentos contiverem diferentes perspectivas sobre o mesmo assunto, apresente essas diferentes visões.
+    4. IMPORTANTE: Suas respostas devem se referir APENAS à empresa CEITEC. NÃO inclua informações sobre outras empresas (como IMBEL e Telebras) mesmo que a pergunta mencione essas empresas.
+    5. Se a pergunta solicitar explicitamente uma comparação com outras empresas, informe que você só possui informações sobre CEITEC.
+    6. Para perguntas sobre finanças, utilize terminologia financeira precisa e apresente dados quantitativos quando disponíveis.
+    7. Para perguntas sobre projetos, estruture a resposta cronologicamente e inclua informações sobre status, orçamento e cronograma quando disponíveis.
 
     Contexto: {context}
     Pergunta: {question}
@@ -198,6 +201,50 @@ def document_count() -> dict: # Nome do resource pode ser mais específico, e.g.
     }
 
 # Definir prompts MCP
+@mcp.prompt()
+def financial_response(company_name: str, financial_data: str, analysis: str, context: str, sources: str) -> str:
+    """Formato para respostas sobre informações financeiras."""
+    return f"""
+    # Análise Financeira: {company_name}
+    
+    ## Dados Financeiros
+    {financial_data}
+    
+    ## Análise
+    {analysis}
+    
+    ## Contexto Econômico e Setorial
+    {context}
+    
+    ## Fontes
+    {sources}
+    """
+
+@mcp.prompt()
+def project_detailed_response(company_name: str, project_name: str, description: str, timeline: str, budget: str, status: str, stakeholders: str, sources: str) -> str:
+    """Formato para respostas detalhadas sobre projetos específicos."""
+    return f"""
+    # Projeto: {project_name} ({company_name})
+    
+    ## Descrição e Objetivos
+    {description}
+    
+    ## Cronograma
+    {timeline}
+    
+    ## Orçamento
+    {budget}
+    
+    ## Status Atual
+    {status}
+    
+    ## Partes Interessadas
+    {stakeholders}
+    
+    ## Fontes
+    {sources}
+    """
+
 @mcp.prompt()
 def technical_response(summary: str, details: str, specs: str, sources: str) -> str: # Nome do prompt pode ser ceitec_technical_response
     """Formato para respostas técnicas sobre semicondutores e chips da CEITEC."""

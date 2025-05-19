@@ -129,7 +129,7 @@ def create_vectorstore(base_paths: List[str] = None, chroma_db_dir: str = CHROMA
         # Instanciar o chunker semântico
         chunker = E5SemanticChunker(
             model_name=EMBEDDING_MODEL,
-            similarity_threshold=0.65,
+            similarity_threshold=0.7,
             max_tokens_per_chunk=1000,
             min_tokens_per_chunk=100,
             print_logging=True

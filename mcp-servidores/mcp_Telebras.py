@@ -35,7 +35,7 @@ from fastmcp import FastMCP, Context
 
 # Definir as constantes de configuração
 CHROMA_DB_DIR_TELEBRAS = "./chroma_db_semantic_Telebras"
-EMBEDDING_MODEL = "intfloat/multilingual-e5-base"
+EMBEDDING_MODEL = "intfloat/multilingual-e5-large"
 
 async def initialize_vectorstore():
     try:
@@ -75,12 +75,17 @@ def initialize_rag_chain(vectorstore):
         search_kwargs={"k": 15, "fetch_k": 50, "lambda_mult": 0.7}
     )
     template = """
-    Você é um assistente IA especializado em análise de documentos da empresa TELEBRAS. Sua função é fornecer informações precisas e contextualizadas com base nos documentos fornecidos.
+        Você é um assistente IA especializado em análise de documentos da empresa Telebras. Sua função é fornecer informações precisas e contextualizadas com base nos documentos fornecidos.
+
     INSTRUÇÕES GERAIS:
     1. Analise cuidadosamente o contexto e a pergunta para identificar o tipo de informação solicitada.
-    2. Use principalmente as informações fornecidas no contexto para responder à pergunta.
+    2. Use EXCLUSIVAMENTE as informações fornecidas no contexto para responder à pergunta.
     3. Seja específico e cite fontes quando possível, incluindo referências a documentos específicos.
-    4. Quando os documentos contiverem diferentes perspectivas sobre o mesmo assunto, apresente essas diferentes visões.
+    4. IMPORTANTE: Suas respostas devem se referir APENAS à empresa Telebras. NÃO inclua informações sobre outras empresas (como CEITEC e IMBEL) mesmo que a pergunta mencione essas empresas.
+    5. Se a pergunta solicitar explicitamente uma comparação com outras empresas, informe que você só possui informações sobre Telebras.
+    6. Para perguntas sobre finanças, utilize terminologia financeira precisa e apresente dados quantitativos quando disponíveis.
+    7. Para perguntas sobre projetos, estruture a resposta cronologicamente e inclua informações sobre status, orçamento e cronograma quando disponíveis.
+
     Contexto: {context}
     Pergunta: {question}
     Resposta:
@@ -293,6 +298,50 @@ def key_projects() -> dict:
     }
 
 # Definir prompts MCP (docstrings já em PT)
+@mcp.prompt()
+def financial_response(company_name: str, financial_data: str, analysis: str, context: str, sources: str) -> str:
+    """Formato para respostas sobre informações financeiras."""
+    return f"""
+    # Análise Financeira: {company_name}
+    
+    ## Dados Financeiros
+    {financial_data}
+    
+    ## Análise
+    {analysis}
+    
+    ## Contexto Econômico e Setorial
+    {context}
+    
+    ## Fontes
+    {sources}
+    """
+
+@mcp.prompt()
+def project_detailed_response(company_name: str, project_name: str, description: str, timeline: str, budget: str, status: str, stakeholders: str, sources: str) -> str:
+    """Formato para respostas detalhadas sobre projetos específicos."""
+    return f"""
+    # Projeto: {project_name} ({company_name})
+    
+    ## Descrição e Objetivos
+    {description}
+    
+    ## Cronograma
+    {timeline}
+    
+    ## Orçamento
+    {budget}
+    
+    ## Status Atual
+    {status}
+    
+    ## Partes Interessadas
+    {stakeholders}
+    
+    ## Fontes
+    {sources}
+    """
+
 @mcp.prompt()
 def technical_response(summary: str, details: str, specs: str, sources: str) -> str:
     """Formato para respostas técnicas sobre telecomunicações da TELEBRAS."""

@@ -1,30 +1,30 @@
-2025-05-16 16:22:35,467 - rag_chat - INFO - Iniciando RAG Chat Client...
-2025-05-16 16:22:35,467 - rag_chat - INFO - Verificando servidor TELEBRAS em http://localhost:8011/mcp/
-2025-05-16 16:22:35,470 - mcp.client.streamable_http - INFO - Connecting to StreamableHTTP endpoint: http://localhost:8011/mcp/
-2025-05-16 16:22:39,234 - httpx - INFO - HTTP Request: POST http://localhost:8011/mcp/ "HTTP/1.1 200 OK"
-2025-05-16 16:22:39,234 - mcp.client.streamable_http - INFO - Received session ID: b0f7fdd5539646d39b2b35ecd49381c0
-2025-05-16 16:22:39,239 - httpx - INFO - HTTP Request: POST http://localhost:8011/mcp/ "HTTP/1.1 202 Accepted"
-2025-05-16 16:22:39,240 - httpx - INFO - HTTP Request: GET http://localhost:8011/mcp/ "HTTP/1.1 200 OK"
-2025-05-16 16:22:39,242 - httpx - INFO - HTTP Request: POST http://localhost:8011/mcp/ "HTTP/1.1 200 OK"
-2025-05-16 16:22:39,243 - rag_chat - INFO - Servidor TELEBRAS OK. Ferramentas: query_telebras, list_document_categories, search_services, search_projects
-2025-05-16 16:22:39,244 - httpx - INFO - HTTP Request: DELETE http://localhost:8011/mcp/ "HTTP/1.1 200 OK"
-2025-05-16 16:22:39,245 - rag_chat - INFO - Verificando servidor CEITEC em http://localhost:8009/mcp/
-2025-05-16 16:22:39,245 - mcp.client.streamable_http - INFO - Connecting to StreamableHTTP endpoint: http://localhost:8009/mcp/
-2025-05-16 16:22:42,985 - httpx - INFO - HTTP Request: POST http://localhost:8009/mcp/ "HTTP/1.1 200 OK"
-2025-05-16 16:22:42,985 - mcp.client.streamable_http - INFO - Received session ID: b8d5fd4f83494c73ab8458b58e9fbd27
-2025-05-16 16:22:42,989 - httpx - INFO - HTTP Request: POST http://localhost:8009/mcp/ "HTTP/1.1 202 Accepted"
-2025-05-16 16:22:42,990 - httpx - INFO - HTTP Request: GET http://localhost:8009/mcp/ "HTTP/1.1 200 OK"
-2025-05-16 16:22:42,992 - httpx - INFO - HTTP Request: POST http://localhost:8009/mcp/ "HTTP/1.1 200 OK"
-2025-05-16 16:22:42,993 - rag_chat - INFO - Servidor CEITEC OK. Ferramentas: query_ceitec, list_document_categories
-2025-05-16 16:22:42,995 - httpx - INFO - HTTP Request: DELETE http://localhost:8009/mcp/ "HTTP/1.1 200 OK"
-2025-05-16 16:22:42,995 - rag_chat - INFO - Verificando servidor IMBEL em http://localhost:8010/mcp/
-2025-05-16 16:22:42,995 - mcp.client.streamable_http - INFO - Connecting to StreamableHTTP endpoint: http://localhost:8010/mcp/
-2025-05-16 16:22:46,464 - httpx - INFO - HTTP Request: POST http://localhost:8010/mcp/ "HTTP/1.1 200 OK"
-2025-05-16 16:22:46,464 - mcp.client.streamable_http - INFO - Received session ID: 130c200e68b64b1ba5906c5b610c6313
-2025-05-16 16:22:46,468 - httpx - INFO - HTTP Request: POST http://localhost:8010/mcp/ "HTTP/1.1 202 Accepted"
-2025-05-16 16:22:46,469 - httpx - INFO - HTTP Request: GET http://localhost:8010/mcp/ "HTTP/1.1 200 OK"
-2025-05-16 16:22:46,471 - httpx - INFO - HTTP Request: POST http://localhost:8010/mcp/ "HTTP/1.1 200 OK"
-2025-05-16 16:22:46,472 - rag_chat - INFO - Servidor IMBEL OK. Ferramentas: query_imbel, list_document_categories, search_products
-2025-05-16 16:22:46,474 - httpx - INFO - HTTP Request: DELETE http://localhost:8010/mcp/ "HTTP/1.1 200 OK"
-2025-05-16 16:22:46,690 - rag_chat - INFO - Tentando portas para o servidor Gradio: [8520, 8525, 8530, 7860, 7861]
-2025-05-16 16:22:46,690 - rag_chat - INFO - Tentando iniciar Gradio na porta 8520...
+2025-05-19 16:46:12,468 - rag_chat - INFO - Iniciando RAG Chat Client...
+2025-05-19 16:46:12,468 - rag_chat - INFO - Verificando servidor TELEBRAS em http://localhost:8011/mcp/
+2025-05-19 16:46:12,471 - mcp.client.streamable_http - INFO - Connecting to StreamableHTTP endpoint: http://localhost:8011/mcp/
+2025-05-19 16:46:17,903 - httpx - INFO - HTTP Request: POST http://localhost:8011/mcp/ "HTTP/1.1 200 OK"
+2025-05-19 16:46:17,903 - mcp.client.streamable_http - INFO - Received session ID: 3164bed9b5ed4e6f91284846f088a3c5
+2025-05-19 16:46:17,908 - httpx - INFO - HTTP Request: POST http://localhost:8011/mcp/ "HTTP/1.1 202 Accepted"
+2025-05-19 16:46:17,908 - httpx - INFO - HTTP Request: GET http://localhost:8011/mcp/ "HTTP/1.1 200 OK"
+2025-05-19 16:46:17,912 - httpx - INFO - HTTP Request: POST http://localhost:8011/mcp/ "HTTP/1.1 200 OK"
+2025-05-19 16:46:17,913 - rag_chat - INFO - Servidor TELEBRAS OK. Ferramentas: query_telebras, list_document_categories, search_services, search_projects
+2025-05-19 16:46:17,915 - httpx - INFO - HTTP Request: DELETE http://localhost:8011/mcp/ "HTTP/1.1 200 OK"
+2025-05-19 16:46:17,915 - rag_chat - INFO - Verificando servidor CEITEC em http://localhost:8009/mcp/
+2025-05-19 16:46:17,915 - mcp.client.streamable_http - INFO - Connecting to StreamableHTTP endpoint: http://localhost:8009/mcp/
+2025-05-19 16:46:24,630 - httpx - INFO - HTTP Request: POST http://localhost:8009/mcp/ "HTTP/1.1 200 OK"
+2025-05-19 16:46:24,630 - mcp.client.streamable_http - INFO - Received session ID: 678752595b3c4c1d89db85b72c823860
+2025-05-19 16:46:24,635 - httpx - INFO - HTTP Request: GET http://localhost:8009/mcp/ "HTTP/1.1 200 OK"
+2025-05-19 16:46:24,635 - httpx - INFO - HTTP Request: POST http://localhost:8009/mcp/ "HTTP/1.1 202 Accepted"
+2025-05-19 16:46:24,637 - httpx - INFO - HTTP Request: POST http://localhost:8009/mcp/ "HTTP/1.1 200 OK"
+2025-05-19 16:46:24,638 - rag_chat - INFO - Servidor CEITEC OK. Ferramentas: query_ceitec, list_document_categories
+2025-05-19 16:46:24,640 - httpx - INFO - HTTP Request: DELETE http://localhost:8009/mcp/ "HTTP/1.1 200 OK"
+2025-05-19 16:46:24,641 - rag_chat - INFO - Verificando servidor IMBEL em http://localhost:8010/mcp/
+2025-05-19 16:46:24,641 - mcp.client.streamable_http - INFO - Connecting to StreamableHTTP endpoint: http://localhost:8010/mcp/
+2025-05-19 16:46:27,531 - httpx - INFO - HTTP Request: POST http://localhost:8010/mcp/ "HTTP/1.1 200 OK"
+2025-05-19 16:46:27,531 - mcp.client.streamable_http - INFO - Received session ID: 7942455a99914baebefa8d84ca3b0e6e
+2025-05-19 16:46:27,535 - httpx - INFO - HTTP Request: POST http://localhost:8010/mcp/ "HTTP/1.1 202 Accepted"
+2025-05-19 16:46:27,536 - httpx - INFO - HTTP Request: GET http://localhost:8010/mcp/ "HTTP/1.1 200 OK"
+2025-05-19 16:46:27,538 - httpx - INFO - HTTP Request: POST http://localhost:8010/mcp/ "HTTP/1.1 200 OK"
+2025-05-19 16:46:27,539 - rag_chat - INFO - Servidor IMBEL OK. Ferramentas: query_imbel, list_document_categories, search_products
+2025-05-19 16:46:27,541 - httpx - INFO - HTTP Request: DELETE http://localhost:8010/mcp/ "HTTP/1.1 200 OK"
+2025-05-19 16:46:27,661 - rag_chat - INFO - Tentando portas para o servidor Gradio: [8520, 8525, 8530, 7860, 7861]
+2025-05-19 16:46:27,662 - rag_chat - INFO - Tentando iniciar Gradio na porta 8520...
