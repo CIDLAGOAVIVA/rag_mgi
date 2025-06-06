@@ -23,6 +23,7 @@ from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import Chroma
 from langchain.prompts import PromptTemplate
 from langchain_deepseek import ChatDeepSeek
+from langchain_community.chat_models import ChatOllama # Adicionar importação do ChatOllama
 from langchain.chains import RetrievalQA
 from contextlib import asynccontextmanager
 
@@ -39,6 +40,7 @@ from fastmcp import FastMCP, Context
 CHROMA_DB_DIR_IMBEL = "./chroma_db_semantic_IMBEL"
 EMBEDDING_MODEL = "intfloat/multilingual-e5-large"
 INITIAL_RETRIEVAL_K = 30  # Recuperação inicial mais ampla
+LLM_CALL = "API"  # Pode ser "API" ou "Ollama"
 
 # Verificar se a chave de API Cohere está definida
 # COHERE_API_KEY = os.getenv("COHERE_API_KEY")
@@ -144,7 +146,18 @@ def initialize_rag_chain(vectorstore):
     Resposta:
     """
     PROMPT = PromptTemplate(template=template, input_variables=["context", "question"])
-    llm = ChatDeepSeek(model="deepseek-chat", temperature=1.0, max_tokens=6000, timeout=None, max_retries=3)
+
+    # Selecionar LLM com base na configuração LLM_CALL
+    if LLM_CALL == "API":
+        print("Usando LLM via API: ChatDeepSeek para IMBEL")
+        llm = ChatDeepSeek(model="deepseek-chat", temperature=1.0, max_tokens=6000, timeout=None, max_retries=3)
+    elif LLM_CALL == "Ollama":
+        print("Usando LLM via Ollama: deepseek-llm para IMBEL")
+        llm = ChatOllama(model="deepseek-llm", temperature=1.0, top_k=40, top_p=0.9, num_ctx=4096) # Ajuste os parâmetros conforme necessário
+    else:
+        print(f"AVISO (IMBEL): Valor de LLM_CALL ('{LLM_CALL}') não reconhecido. Usando ChatDeepSeek por padrão.")
+        llm = ChatDeepSeek(model="deepseek-chat", temperature=1.0, max_tokens=6000, timeout=None, max_retries=3)
+        
     rag_chain = RetrievalQA.from_chain_type(
         llm=llm, chain_type="stuff", retriever=retriever,
         return_source_documents=True, chain_type_kwargs={"prompt": PROMPT}

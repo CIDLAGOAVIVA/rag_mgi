@@ -19,6 +19,7 @@ MCP-materiais/
 chroma_db_semantic_CEITEC/
 chroma_db_semantic_IMBEL/
 chroma_db_semantic_Telebras/
+test_telebras_client.py
 
 # Temporary files and directories
 processed_files.json

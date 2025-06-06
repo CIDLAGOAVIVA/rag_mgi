@@ -24,18 +24,33 @@ logger = logging.getLogger("rag_chat")
 # FastMCP v2 importações
 from fastmcp import Client
 from fastmcp.client.transports import StreamableHttpTransport
+from langchain_community.chat_models import ChatOllama # Adicionar importação do ChatOllama
+from langchain_core.messages import SystemMessage, HumanMessage # Para formatar mensagens para ChatOllama
 
 # Variáveis de ambiente
 load_dotenv()
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
-if not DEEPSEEK_API_KEY:
-    logger.error("DEEPSEEK_API_KEY não encontrada. Verifique o arquivo .env")
 
-# Cliente OpenAI para DeepSeek
-openai_client = OpenAI(
-    base_url="https://api.deepseek.com",
-    api_key=DEEPSEEK_API_KEY
-)
+# Adicionar a nova variável de configuração LLM_CALL
+LLM_CALL = "API"  # Pode ser "API" ou "Ollama"
+
+if LLM_CALL == "API" and not DEEPSEEK_API_KEY:
+    logger.error("DEEPSEEK_API_KEY não encontrada e LLM_CALL='API'. Verifique o arquivo .env")
+    # Considerar sair ou definir um fallback se a API for essencial e a chave estiver faltando
+    # sys.exit(1) 
+elif LLM_CALL == "Ollama":
+    logger.info("LLM_CALL configurado para 'Ollama'. A chave DEEPSEEK_API_KEY não será usada para a síntese principal.")
+
+# Cliente OpenAI para DeepSeek (será usado se LLM_CALL == "API")
+openai_client = None
+if LLM_CALL == "API" and DEEPSEEK_API_KEY:
+    openai_client = OpenAI(
+        base_url="https://api.deepseek.com",
+        api_key=DEEPSEEK_API_KEY
+    )
+elif LLM_CALL == "API" and not DEEPSEEK_API_KEY:
+    logger.warning("LLM_CALL é 'API', mas DEEPSEEK_API_KEY não está definida. A síntese via API falhará.")
+
 
 # Configurações dos servidores MCP
 MCP_SERVERS = {
@@ -53,7 +68,7 @@ except Exception as e:
     logger.warning(f"Não foi possível inicializar o CrossEncoder: {e}")
     RERANKING_ENABLED = False
 
-def rerank_results(query: str, results_dict: dict, top_n: int = 5) -> dict:
+def rerank_results(query: str, results_dict: dict, top_n: int = 15) -> dict:
     """
     Reordena os resultados da consulta usando CrossEncoder para reranking.
     
@@ -286,10 +301,10 @@ def create_consolidated_summary(query: str, results_dict: dict) -> str:
         logger.error("Nenhuma resposta válida para sintetizar.")
         return "Não foi possível obter informações relevantes."
     
-    logger.info(f"Sintetizando {len(valid_responses)} respostas...")
+    logger.info(f"Sintetizando {len(valid_responses)} respostas usando {LLM_CALL}...")
     
     # Prompt para a síntese do LLM
-    system_prompt = """
+    system_prompt_content = """
     Sintetize as seguintes informações de diferentes fontes (TELEBRAS, CEITEC, IMBEL) sobre empresas estatais brasileiras. 
     
     INSTRUÇÕES IMPORTANTES:
@@ -302,42 +317,66 @@ def create_consolidated_summary(query: str, results_dict: dict) -> str:
     7. Se a pergunta feita pelo usuário não tiver relação com as empresas estatais, informe que não há contexto relevante disponível.
     """
     context_str = "\n\n".join([f"FONTE {r['server']}:\n{r['answer']}" for r in valid_responses])
-    user_prompt = f"PERGUNTA: {query}\n\nDADOS DAS FONTES:\n{context_str}\n\nRESPOSTA SINTETIZADA:"
+    user_prompt_content = f"PERGUNTA: {query}\n\nDADOS DAS FONTES:\n{context_str}\n\nRESPOSTA SINTETIZADA:"
+    
+    synthesized_answer = ""
+
     try:
-        logger.info("Enviando para síntese LLM...")
-        api_response = openai_client.chat.completions.create(
-            model="deepseek-chat", messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt}],
-            temperature=1.0, max_tokens=6000
-        )
-        synthesized_answer = api_response.choices[0].message.content
+        if LLM_CALL == "API":
+            if not openai_client:
+                raise ValueError("Cliente OpenAI (DeepSeek API) não inicializado. Verifique DEEPSEEK_API_KEY.")
+            logger.info("Enviando para síntese LLM via API (DeepSeek)...")
+            api_response = openai_client.chat.completions.create(
+                model="deepseek-chat", 
+                messages=[
+                    {"role": "system", "content": system_prompt_content},
+                    {"role": "user", "content": user_prompt_content}
+                ],
+                temperature=1.0, 
+                max_tokens=6000
+            )
+            synthesized_answer = api_response.choices[0].message.content
+        
+        elif LLM_CALL == "Ollama":
+            logger.info("Enviando para síntese LLM via Ollama (deepseek-llm)...")
+            ollama_llm = ChatOllama(model="deepseek-llm", temperature=1.0) # Adicione outros parâmetros se necessário
+            messages_for_ollama = [
+                SystemMessage(content=system_prompt_content),
+                HumanMessage(content=user_prompt_content)
+            ]
+            response_ollama = ollama_llm.invoke(messages_for_ollama)
+            synthesized_answer = response_ollama.content
+        
+        else:
+            logger.error(f"Valor de LLM_CALL ('{LLM_CALL}') não reconhecido. Não foi possível sintetizar.")
+            raise ValueError(f"Configuração LLM_CALL inválida: {LLM_CALL}")
+
         logger.info(f"Síntese LLM gerada ({len(synthesized_answer)} chars).")
         
         # Processar o dicionário de fontes em uma lista plana para exibição
-        flat_all_sources = []
-        for server_key in all_sources_dict:
-            for source_item in all_sources_dict[server_key]:
-                flat_all_sources.append(f"{server_key}: {source_item}") # Add server prefix to source
+        # flat_all_sources = []
+        # for server_key in all_sources_dict:
+        #     for source_item in all_sources_dict[server_key]:
+        #         flat_all_sources.append(f"{server_key}: {source_item}") # Add server prefix to source
 
-        if flat_all_sources:
-            unique_sources = sorted(list(set(flat_all_sources)))[:15]
-            return f"{synthesized_answer}\n\n**Fontes:**\n" + "\n".join(f"- {s}" for s in unique_sources)
+        # if flat_all_sources:
+        #     unique_sources = sorted(list(set(flat_all_sources)))[:15]
+        #     return f"{synthesized_answer}\n\n**Fontes:**\n" + "\n".join(f"- {s}" for s in unique_sources)
         return synthesized_answer
 
     except Exception as e:
-        logger.error(f"Erro na síntese LLM: {e}", exc_info=True)
+        logger.error(f"Erro na síntese LLM ({LLM_CALL}): {e}", exc_info=True)
         fallback_answer = "**Respostas Individuais:**\n" + "\n".join(f"**{r['server']}:**\n{r['answer']}" for r in valid_responses)
         
         # Processar o dicionário de fontes em uma lista plana para exibição
         # Fallback para fontes
-        flat_all_sources_fallback = []
-        for server_key_fb in all_sources_dict:
-            for source_item_fb in all_sources_dict[server_key_fb]:
-                flat_all_sources_fallback.append(f"{server_key_fb}: {source_item_fb}")
+        # flat_all_sources_fallback = []
+        # for server_key_fb in all_sources_dict:
+        #     for source_item_fb in all_sources_dict[server_key_fb]:
+        #         flat_all_sources_fallback.append(f"{server_key_fb}: {source_item_fb}")
 
-        if flat_all_sources_fallback:
-             fallback_answer += "\n\n**Fontes:**\n" + "\n".join(f"- {s}" for s in sorted(list(set(flat_all_sources_fallback)))[:10])
+        # if flat_all_sources_fallback:
+        #      fallback_answer += "\n\n**Fontes:**\n" + "\n".join(f"- {s}" for s in sorted(list(set(flat_all_sources_fallback)))[:10])
         return fallback_answer
 
 def detect_company_in_query(query: str) -> str:
@@ -393,7 +432,7 @@ async def async_rag_mcp_response(message: str, history: list, mode: str = "aggre
             content = results_data[mode]["content"]
             answer, sources, proc_time = content.get("answer", "Sem resposta."), content.get("sources", []), content.get("processing_time", 0)
             final_response_str = f"{answer}"
-            if sources: final_response_str += "\n\n**Fontes:**\n" + "\n".join(f"- {s}" for s in sorted(list(set(sources)))[:5])
+            # if sources: final_response_str += "\n\n**Fontes:**\n" + "\n".join(f"- {s}" for s in sorted(list(set(sources)))[:5])
             final_response_str += f"\n\n[{mode}, {proc_time:.2f}s]"
         elif mode in results_data and results_data[mode] and "error" in results_data[mode]:
             final_response_str = f"Erro ({mode}): {results_data[mode]['error']}"

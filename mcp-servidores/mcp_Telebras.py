@@ -40,7 +40,7 @@ from fastmcp import FastMCP, Context
 CHROMA_DB_DIR_TELEBRAS = "./chroma_db_semantic_Telebras"
 EMBEDDING_MODEL = "intfloat/multilingual-e5-large"
 INITIAL_RETRIEVAL_K = 30  # Recuperação inicial mais ampla
-LLM_CALL = "Ollama"  # Pode ser "API" ou "Ollama"
+LLM_CALL = "API"  # Pode ser "API" ou "Ollama"
 
 # Verificar se a chave de API Cohere está definida
 # COHERE_API_KEY = os.getenv("COHERE_API_KEY")
