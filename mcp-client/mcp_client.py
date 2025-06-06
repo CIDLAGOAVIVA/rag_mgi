@@ -7,6 +7,8 @@ import logging
 import gradio as gr
 from dotenv import load_dotenv
 from openai import OpenAI
+from sentence_transformers import CrossEncoder  # Importando CrossEncoder para reranking local
+import httpx
 
 # Configurar logging
 logging.basicConfig(
@@ -35,12 +37,77 @@ openai_client = OpenAI(
     api_key=DEEPSEEK_API_KEY
 )
 
-# Configurações dos servidores MCP (descrições abreviadas para o exemplo)
+# Configurações dos servidores MCP
 MCP_SERVERS = {
     "TELEBRAS": {"url": "http://localhost:8011/mcp/", "description": "Conhecimento TELEBRAS."},
     "CEITEC": {"url": "http://localhost:8009/mcp/", "description": "Conhecimento CEITEC."},
     "IMBEL": {"url": "http://localhost:8010/mcp/", "description": "Conhecimento IMBEL."}
 }
+
+# Inicializar o CrossEncoder para reranking local
+try:
+    cross_encoder = CrossEncoder("cross-encoder/ms-marco-MiniLM-L6-v2")
+    RERANKING_ENABLED = True
+    logger.info("CrossEncoder para reranking local inicializado com sucesso")
+except Exception as e:
+    logger.warning(f"Não foi possível inicializar o CrossEncoder: {e}")
+    RERANKING_ENABLED = False
+
+def rerank_results(query: str, results_dict: dict, top_n: int = 5) -> dict:
+    """
+    Reordena os resultados da consulta usando CrossEncoder para reranking.
+    
+    Args:
+        query: A consulta original
+        results_dict: Dicionário de resultados para reordenar
+        top_n: Número de fontes a manter após reranking
+        
+    Returns:
+        Dicionário com resultados reordenados
+    """
+    if not RERANKING_ENABLED:
+        return results_dict
+    
+    try:
+        reranked_results = {}
+        
+        # Para cada servidor, aplicar reranking às fontes se possível
+        for server_name, result_data in results_dict.items():
+            if not result_data or "error" in result_data or "content" not in result_data:
+                reranked_results[server_name] = result_data
+                continue
+                
+            content = result_data["content"]
+            answer, sources = content.get("answer", ""), content.get("sources", [])
+            
+            if sources and len(sources) > top_n:
+                # Preparar pares consulta-documento para o CrossEncoder
+                doc_pairs = [(query, source) for source in sources]
+                
+                # Calcular scores com o CrossEncoder
+                try:
+                    scores = cross_encoder.predict(doc_pairs)
+                    
+                    # Ordenar fontes por score
+                    sorted_pairs = sorted(zip(sources, scores), key=lambda x: x[1], reverse=True)
+                    top_sources = [source for source, _ in sorted_pairs[:top_n]]
+                    
+                    # Atualizar as fontes no resultado
+                    content["sources"] = top_sources
+                    content["reranked"] = True
+                    
+                    logger.info(f"Reranking aplicado com sucesso para {server_name}: {len(sources)} -> {len(top_sources)} fontes")
+                except Exception as e:
+                    logger.error(f"Erro ao aplicar reranking para {server_name}: {e}")
+                    # Manter as fontes originais em caso de erro
+            
+            reranked_results[server_name] = result_data
+            
+        return reranked_results
+        
+    except Exception as e:
+        logger.error(f"Erro no processo de reranking: {e}")
+        return results_dict  # Retornar resultados originais em caso de erro
 
 async def parallel_mcp_query(query: str, max_results: int = 5, target_server: str = None) -> tuple[dict, list]:
     results = {}
@@ -59,72 +126,103 @@ async def parallel_mcp_query(query: str, max_results: int = 5, target_server: st
             msg = f"Configuração para {server_name} não encontrada."
             logger.error(msg)
             return server_name, {"error": msg}
-        try:
-            logger.info(f"Consultando {server_name} ({server_config['url']}) com query: '{query[:50]}...'")
-            start_time_query = time.time()
-            transport = StreamableHttpTransport(url=server_config['url'])
-            async with Client(transport=transport) as mcp_client_instance:
-                tools_list = await asyncio.wait_for(mcp_client_instance.list_tools(), timeout=15.0)
-                tool_name_to_call = f"query_{server_name.lower()}"
-                if not any(tool_obj.name == tool_name_to_call for tool_obj in tools_list):
-                    available_tools_names = [tool_obj.name for tool_obj in tools_list]
-                    msg = f"Ferramenta '{tool_name_to_call}' não encontrada em {server_name}. Disponíveis: {available_tools_names}"
-                    logger.error(msg)
-                    return server_name, {"error": msg}
-                logger.info(f"Chamando '{tool_name_to_call}' em {server_name}...")
-                response_content_list = await asyncio.wait_for(
-                    mcp_client_instance.call_tool(
-                        name=tool_name_to_call,
-                        arguments={"query": query, "max_results": max_results}
-                    ),
-                    timeout=45.0
-                )
-                response_data = None
-                if response_content_list:
-                    content_item = response_content_list[0]
-                    if hasattr(content_item, 'text'):
-                        try:
-                            response_data = json.loads(content_item.text)
-                        except json.JSONDecodeError as je:
-                            raw_text = content_item.text
-                            msg = f"Erro ao decodificar JSON de {server_name}: {je}. Recebido: '{raw_text[:200]}...'"
-                            logger.error(msg)
-                            return server_name, {"error": msg, "raw_response": raw_text}
-                    elif isinstance(content_item, dict):
-                        response_data = content_item
+        
+        # Adicionar tentativas de reconexão
+        max_retries = 3
+        retry_delay = 2
+        
+        for attempt in range(1, max_retries + 1):
+            try:
+                logger.info(f"Consultando {server_name} ({server_config['url']}) com query: '{query[:50]}...' (tentativa {attempt}/{max_retries})")
+                start_time_query = time.time()
                 
-                if isinstance(response_data, dict):
-                    logger.info(f"Resposta recebida com sucesso de {server_name}.")
-                    return server_name, {
-                        "content": {
-                            "answer": response_data.get("answer", "N/A"),
-                            "sources": response_data.get("sources", []),
-                            "processing_time": response_data.get("processing_time", time.time() - start_time_query),
-                            "source_server": server_name
+                # Remover o parâmetro timeout que estava causando o erro
+                transport = StreamableHttpTransport(url=server_config['url'])
+                
+                async with Client(transport=transport) as mcp_client_instance:
+                    # Manter o timeout apenas na chamada wait_for
+                    tools_list = await asyncio.wait_for(mcp_client_instance.list_tools(), timeout=30.0)
+                    tool_name_to_call = f"query_{server_name.lower()}"
+                    if not any(tool_obj.name == tool_name_to_call for tool_obj in tools_list):
+                        available_tools_names = [tool_obj.name for tool_obj in tools_list]
+                        msg = f"Ferramenta '{tool_name_to_call}' não encontrada em {server_name}. Disponíveis: {available_tools_names}"
+                        logger.error(msg)
+                        return server_name, {"error": msg}
+                    
+                    logger.info(f"Chamando '{tool_name_to_call}' em {server_name}...")
+                    response_content_list = await asyncio.wait_for(
+                        mcp_client_instance.call_tool(
+                            name=tool_name_to_call,
+                            arguments={"query": query, "max_results": max_results}
+                        ),
+                        timeout=120.0
+                    )
+                    
+                    # Processar resposta como antes...
+                    response_data = None
+                    if response_content_list:
+                        content_item = response_content_list[0]
+                        if hasattr(content_item, 'text'):
+                            try:
+                                response_data = json.loads(content_item.text)
+                            except json.JSONDecodeError as je:
+                                raw_text = content_item.text
+                                msg = f"Erro ao decodificar JSON de {server_name}: {je}. Recebido: '{raw_text[:200]}...'"
+                                logger.error(msg)
+                                return server_name, {"error": msg, "raw_response": raw_text}
+                        elif isinstance(content_item, dict):
+                            response_data = content_item
+                    
+                    if isinstance(response_data, dict):
+                        logger.info(f"Resposta recebida com sucesso de {server_name}.")
+                        return server_name, {
+                            "content": {
+                                "answer": response_data.get("answer", "N/A"),
+                                "sources": response_data.get("sources", []),
+                                "processing_time": response_data.get("processing_time", time.time() - start_time_query),
+                                "source_server": server_name
+                            }
                         }
-                    }
-                else:
-                    raw_resp_str = str(response_content_list[0]) if response_content_list else "Lista de conteúdo vazia"
-                    msg = f"Formato de dados de resposta inesperado de {server_name}: {type(response_data)}. Conteúdo bruto: '{raw_resp_str[:200]}...'"
-                    logger.warning(msg)
-                    return server_name, {"error": msg, "raw_response": raw_resp_str}
-        except asyncio.TimeoutError:
-            msg = f"Timeout ao consultar {server_name}."
-            logger.error(msg)
-            return server_name, {"error": msg}
-        except Exception as e:
-            msg = f"Erro ao consultar {server_name}: {type(e).__name__} - {str(e)}"
-            logger.error(msg)
-            logger.error(traceback.format_exc())
-            return server_name, {"error": msg}
+                    else:
+                        raw_resp_str = str(response_content_list[0]) if response_content_list else "Lista de conteúdo vazia"
+                        msg = f"Formato de dados de resposta inesperado de {server_name}: {type(response_data)}. Conteúdo bruto: '{raw_resp_str[:200]}...'"
+                        logger.warning(msg)
+                        return server_name, {"error": msg, "raw_response": raw_resp_str}
+                    
+            except asyncio.TimeoutError:
+                msg = f"Timeout ao consultar {server_name} (tentativa {attempt}/{max_retries})."
+                logger.error(msg)
+                if attempt < max_retries:
+                    logger.info(f"Tentando novamente em {retry_delay} segundos...")
+                    await asyncio.sleep(retry_delay)
+                    continue  # Tenta novamente
+                return server_name, {"error": msg}
+            
+            except (httpx.RemoteProtocolError, httpx.ReadTimeout) as conn_err:
+                msg = f"Erro de conexão com {server_name}: {type(conn_err).__name__} - {str(conn_err)} (tentativa {attempt}/{max_retries})"
+                logger.error(msg)
+                if attempt < max_retries:
+                    logger.info(f"Tentando novamente em {retry_delay} segundos...")
+                    await asyncio.sleep(retry_delay)
+                    continue  # Tenta novamente
+                return server_name, {"error": msg}
+            
+            except Exception as e:
+                msg = f"Erro ao consultar {server_name}: {type(e).__name__} - {str(e)}"
+                logger.error(msg)
+                logger.error(traceback.format_exc())
+                return server_name, {"error": msg}
 
-    tasks = [query_server(name) for name in MCP_SERVERS.keys()]
+        # Se chegou aqui, todas as tentativas falharam
+        return server_name, {"error": f"Falha em todas as {max_retries} tentativas de conexão com {server_name}."}
+
+    tasks = [query_server(name) for name in servers_to_query]
     if not tasks:
         logger.warning("Nenhum servidor MCP configurado para consulta.")
         return {}, ["Nenhum servidor configurado"]
     logger.info(f"Iniciando {len(tasks)} consultas MCP paralelas...")
     task_results_tuples = await asyncio.gather(*tasks, return_exceptions=True)
-    for i, server_name_key in enumerate(MCP_SERVERS.keys()):
+    for i, server_name_key in enumerate(servers_to_query):
         result_or_exc = task_results_tuples[i]
         if isinstance(result_or_exc, Exception):
             msg = f"Exceção na tarefa de consulta para {server_name_key}: {result_or_exc}"
@@ -148,6 +246,12 @@ async def parallel_mcp_query(query: str, max_results: int = 5, target_server: st
             logger.error(msg)
             results[server_name_key] = {"error": msg}
             errors.append(msg)
+    
+    # Aplicar reranking às fontes se o CrossEncoder estiver disponível
+    if RERANKING_ENABLED:
+        logger.info("Aplicando reranking às fontes...")
+        results = rerank_results(query, results)
+            
     return results, errors
 
 def create_consolidated_summary(query: str, results_dict: dict) -> str:
@@ -195,6 +299,7 @@ def create_consolidated_summary(query: str, results_dict: dict) -> str:
     4. Para perguntas sobre finanças, utilize terminologia financeira precisa.
     5. Para perguntas sobre projetos, estruture cronologicamente.
     6. Cite explicitamente a empresa de origem de cada informação.
+    7. Se a pergunta feita pelo usuário não tiver relação com as empresas estatais, informe que não há contexto relevante disponível.
     """
     context_str = "\n\n".join([f"FONTE {r['server']}:\n{r['answer']}" for r in valid_responses])
     user_prompt = f"PERGUNTA: {query}\n\nDADOS DAS FONTES:\n{context_str}\n\nRESPOSTA SINTETIZADA:"
@@ -219,6 +324,7 @@ def create_consolidated_summary(query: str, results_dict: dict) -> str:
             unique_sources = sorted(list(set(flat_all_sources)))[:15]
             return f"{synthesized_answer}\n\n**Fontes:**\n" + "\n".join(f"- {s}" for s in unique_sources)
         return synthesized_answer
+
     except Exception as e:
         logger.error(f"Erro na síntese LLM: {e}", exc_info=True)
         fallback_answer = "**Respostas Individuais:**\n" + "\n".join(f"**{r['server']}:**\n{r['answer']}" for r in valid_responses)
@@ -317,18 +423,24 @@ async def rag_aggregated_response_async(message, history):
 async def check_server_availability(name: str, url: str) -> tuple[bool, list[str] | str]:
     logger.info(f"Verificando servidor {name} em {url}")
     try:
+        # Remover o parâmetro timeout daqui também
         transport = StreamableHttpTransport(url=url)
         async with Client(transport=transport) as client_check:
-            tools = await asyncio.wait_for(client_check.list_tools(), timeout=10.0)
-            tool_names = [tool.name for tool in tools]
-            logger.info(f"Servidor {name} OK. Ferramentas: {', '.join(tool_names)}")
-            return True, tool_names
+            try:
+                tools = await asyncio.wait_for(client_check.list_tools(), timeout=10.0)
+                tool_names = [tool.name for tool in tools]
+                logger.info(f"Servidor {name} OK. Ferramentas: {', '.join(tool_names)}")
+                return True, tool_names
+            except (httpx.HTTPStatusError, RuntimeError) as server_err:
+                msg = f"Erro do servidor MCP ({url}): {type(server_err).__name__} - {server_err}"
+                logger.error(msg)
+                return False, msg
     except asyncio.TimeoutError:
         msg = f"Timeout MCP ({url})"
         logger.error(msg)
         return False, msg
     except Exception as e:
-        msg = f"Erro MCP ({url}): {type(e).__name__}"
+        msg = f"Erro MCP ({url}): {type(e).__name__} - {str(e)}"
         logger.error(msg, exc_info=True)
         return False, msg
 

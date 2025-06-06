@@ -2,9 +2,9 @@ import os
 import sys
 import time
 import asyncio
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List, Callable
 from dotenv import load_dotenv
-from types import SimpleNamespace # Importar SimpleNamespace
+from types import SimpleNamespace
 
 # Adicionar o diretório raiz do projeto ao sys.path ANTES da importação local
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -12,7 +12,7 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 # Importar do módulo RAG específico da IMBEL
-from rag_2.rag_cria_bd_IMBEL import ( # ATENÇÃO: Verifique se o nome do módulo está correto
+from rag_2.rag_cria_bd_IMBEL import (
     create_vectorstore,
     load_processed_files,
     save_processed_files,
@@ -26,17 +26,27 @@ from langchain_deepseek import ChatDeepSeek
 from langchain.chains import RetrievalQA
 from contextlib import asynccontextmanager
 
+# Importações para reranking
+from langchain.retrievers import ContextualCompressionRetriever
+from langchain.retrievers.document_compressors.base import BaseDocumentCompressor
+from langchain_core.retrievers import BaseRetriever
+from langchain_core.documents import Document
+
 # Importar FastMCP v2
 from fastmcp import FastMCP, Context
 
 # Definir as constantes de configuração
 CHROMA_DB_DIR_IMBEL = "./chroma_db_semantic_IMBEL"
-EMBEDDING_MODEL = "intfloat/multilingual-e5-large" # Modelo de embedding
+EMBEDDING_MODEL = "intfloat/multilingual-e5-large"
+INITIAL_RETRIEVAL_K = 30  # Recuperação inicial mais ampla
+
+# Verificar se a chave de API Cohere está definida
+# COHERE_API_KEY = os.getenv("COHERE_API_KEY")
+USE_CROSS_ENCODER = True  # Determina se deve usar CrossEncoder local
 
 async def initialize_vectorstore():
     try:
-        # ATENÇÃO: Estas funções devem ser específicas da IMBEL se necessário
-        processed_files_record = load_processed_files() # Assume que esta função é apropriada para IMBEL
+        processed_files_record = load_processed_files()
 
         if os.path.exists(CHROMA_DB_DIR_IMBEL) and os.path.isdir(CHROMA_DB_DIR_IMBEL):
             print(f"Carregando base de dados vetorial existente de {CHROMA_DB_DIR_IMBEL}...")
@@ -51,17 +61,16 @@ async def initialize_vectorstore():
                     if os.path.exists(base_path) and os.path.isdir(base_path):
                         print(f"Escaneando documentos em: {base_path}")
                         for root, _, files_in_dir in os.walk(base_path):
-                            for file_item in files_in_dir: # Renomeado
+                            for file_item in files_in_dir:
                                 if file_item.endswith('.md'):
                                     file_path = os.path.join(root, file_item)
                                     novo_registro[file_path] = calculate_file_hash(file_path)
                 print(f"Salvando registro de {len(novo_registro)} arquivos existentes...")
-                save_processed_files(novo_registro) # Assume que esta função é apropriada
+                save_processed_files(novo_registro)
                 processed_files_record = novo_registro
             print(f"Base de dados vetorial existente carregada. Registro contém {len(processed_files_record)} arquivos.")
         else:
             print(f"Base de dados vetorial não encontrada em {CHROMA_DB_DIR_IMBEL}. Criando nova base...")
-            # A função create_vectorstore também deve ser específica para IMBEL se necessário
             vectorstore = create_vectorstore(base_paths=DEFAULT_BASE_PATHS_IMBEL, chroma_db_dir=CHROMA_DB_DIR_IMBEL)
             print("Base de dados vetorial criada com sucesso.")
         return vectorstore
@@ -70,10 +79,54 @@ async def initialize_vectorstore():
         raise
 
 def initialize_rag_chain(vectorstore):
-    retriever = vectorstore.as_retriever(
+    # Configurar o retrievador base
+    base_retriever = vectorstore.as_retriever(
         search_type="mmr",
-        search_kwargs={"k": 15, "fetch_k": 50, "lambda_mult": 0.7}
+        search_kwargs={"k": INITIAL_RETRIEVAL_K, "fetch_k": 50, "lambda_mult": 0.7}
     )
+    
+    # Inicializar o componente de reranking
+    if USE_CROSS_ENCODER:
+        try:
+            from sentence_transformers import CrossEncoder
+            
+            print("Utilizando CrossEncoder local para reranking...")
+            cross_encoder = CrossEncoder("cross-encoder/ms-marco-MiniLM-L6-v2")
+            
+            def cross_encoder_rerank(query: str, docs: List[Document], top_n: int = 15) -> List[Document]:
+                if not docs:
+                    return []
+                doc_pairs = [(query, doc.page_content) for doc in docs]
+                scores = cross_encoder.predict(doc_pairs)
+                doc_score_pairs = sorted(zip(docs, scores), key=lambda x: x[1], reverse=True)
+                return [doc for doc, _ in doc_score_pairs[:top_n]]
+
+            # Definir a classe wrapper de retriever aqui
+            class CustomRerankingRetriever(BaseRetriever):
+                underlying_retriever: BaseRetriever
+                custom_rerank_function: Callable[[str, List[Document]], List[Document]]
+
+                async def _aget_relevant_documents(self, query: str, **kwargs: Any) -> List[Document]:
+                    docs = await self.underlying_retriever.aget_relevant_documents(query, **kwargs)
+                    return self.custom_rerank_function(query, docs)
+                
+                def _get_relevant_documents(self, query: str, **kwargs: Any) -> List[Document]:
+                    docs = self.underlying_retriever.get_relevant_documents(query, **kwargs)
+                    return self.custom_rerank_function(query, docs)
+            
+            retriever = CustomRerankingRetriever(
+                underlying_retriever=base_retriever,
+                custom_rerank_function=lambda q, d: cross_encoder_rerank(q, d, top_n=15)
+            )
+            print("Retriever com reranking customizado (CrossEncoder) inicializado.")
+        except ImportError:
+            print("Aviso: Não foi possível inicializar CrossEncoder, utilizando retrievador base...")
+            retriever = base_retriever
+    else:
+        print("Aviso: CrossEncoder desativado. Utilizando retrievador base...")
+        retriever = base_retriever
+    
+    # Template de prompt
     template = """
         Você é um assistente IA especializado em análise de documentos da empresa IMBEL. Sua função é fornecer informações precisas e contextualizadas com base nos documentos fornecidos.
 
@@ -127,9 +180,9 @@ async def app_lifespan(app: FastMCP):
         print(f"Lifespan: Recursos para {app.name} limpos.")
 
 mcp = FastMCP(
-    name="Base de Conhecimento IMBEL", # Traduzido
+    name="Base de Conhecimento IMBEL",
     lifespan=app_lifespan,
-    instructions="Servidor de conhecimento sobre a empresa IMBEL e seus produtos de defesa e segurança.", # Já em PT
+    instructions="Servidor de conhecimento sobre a empresa IMBEL e seus produtos de defesa e segurança.",
     cors_origins=["*"]
 )
 
@@ -164,7 +217,7 @@ async def query_imbel(query: str, max_results: int = 15, ctx: Context = None) ->
     return result
 
 @mcp.tool()
-async def list_document_categories(ctx: Context = None) -> dict: # Nome da tool pode ser mais específico
+async def list_document_categories(ctx: Context = None) -> dict:
     """Lista as categorias de documentos disponíveis sobre a IMBEL."""
     if ctx: await ctx.info("Listando categorias de documentos da IMBEL")
     categories = [
@@ -174,7 +227,7 @@ async def list_document_categories(ctx: Context = None) -> dict: # Nome da tool 
     return {"categories": categories}
 
 @mcp.tool()
-async def search_products(product_name: str, details: bool = False, ctx: Context = None) -> dict: # Nome da tool pode ser mais específico
+async def search_products(product_name: str, details: bool = False, ctx: Context = None) -> dict:
     """
     Busca informações sobre produtos específicos da IMBEL.
     Args:
@@ -203,7 +256,7 @@ async def search_products(product_name: str, details: bool = False, ctx: Context
         "processing_time": processing_time
     }
     if details:
-        result["technical_details"] = "Informações técnicas completas obtidas da base de conhecimento." # Detalhes técnicos
+        result["technical_details"] = "Informações técnicas completas obtidas da base de conhecimento."
     else:
         result["technical_details"] = "Detalhes técnicos completos disponíveis mediante solicitação."
 
@@ -217,24 +270,23 @@ def imbel_overview() -> dict:
     return {
         "name": "IMBEL",
         "full_name": "Indústria de Material Bélico do Brasil",
-        "headquarters": "Brasília, DF, Brasil", # Sede
-        "industry": "Defesa e Segurança", # Indústria
-        "main_products": ["Armamentos", "Munições", "Explosivos", "Equipamentos militares"], # Principais produtos
+        "headquarters": "Brasília, DF, Brasil",
+        "industry": "Defesa e Segurança",
+        "main_products": ["Armamentos", "Munições", "Explosivos", "Equipamentos militares"],
         "description": "A IMBEL é uma empresa estatal brasileira vinculada ao Exército Brasileiro, focada no desenvolvimento e produção de material de defesa e segurança."
     }
 
 @mcp.resource("imbel://document-count")
-def document_count() -> dict: # Nome do resource pode ser imbel_document_count
+def document_count() -> dict:
     """Informações sobre a quantidade de documentos na base de conhecimento da IMBEL."""
-    # Esta função load_processed_files deve ser a específica da IMBEL
     return {
-        "total_documents": len(load_processed_files()), # Total de documentos
-        "total_chunks": "Variável conforme processamento", # Total de pedaços (chunks)
-        "last_updated": time.strftime("%Y-%m-%d %H:%M:%S"), # Última atualização
+        "total_documents": len(load_processed_files()),
+        "total_chunks": "Variável conforme processamento",
+        "last_updated": time.strftime("%Y-%m-%d %H:%M:%S"),
     }
 
 @mcp.resource("imbel://product-categories")
-def product_categories() -> dict: # Nome do resource pode ser imbel_product_categories
+def product_categories() -> dict:
     """Categorias de produtos da IMBEL."""
     return {
         "categories": [
@@ -289,7 +341,7 @@ def project_detailed_response(company_name: str, project_name: str, description:
     """
 
 @mcp.prompt()
-def technical_response(summary: str, details: str, specs: str, sources: str) -> str: # Nome do prompt pode ser imbel_technical_response
+def technical_response(summary: str, details: str, specs: str, sources: str) -> str:
     """Formato para respostas técnicas sobre produtos da IMBEL."""
     return f"""
     # Resposta Técnica sobre IMBEL
@@ -304,7 +356,7 @@ def technical_response(summary: str, details: str, specs: str, sources: str) -> 
     """
 
 @mcp.prompt()
-def general_response(main_content: str, additional_info: str, sources: str) -> str: # Nome do prompt pode ser imbel_general_response
+def general_response(main_content: str, additional_info: str, sources: str) -> str:
     """Formato para respostas gerais sobre a IMBEL."""
     return f"""
     # Informações sobre IMBEL
@@ -316,7 +368,7 @@ def general_response(main_content: str, additional_info: str, sources: str) -> s
     """
 
 @mcp.prompt()
-def product_response(product_name: str, description: str, features: str, specs: str, sources: str) -> str: # Nome do prompt pode ser imbel_product_response
+def product_response(product_name: str, description: str, features: str, specs: str, sources: str) -> str:
     """Formato para respostas sobre produtos específicos da IMBEL."""
     return f"""
     # Produto: {product_name}
@@ -342,7 +394,7 @@ async def health_check(request):
     return JSONResponse(healthy_status)
 
 if __name__ == "__main__":
-    port = int(os.getenv("PORT", 8010)) # Porta padrão para IMBEL
+    port = int(os.getenv("PORT", 8010))
     load_dotenv()
     print(f"Iniciando servidor MCP para IMBEL na porta {port}...")
     mcp.run(

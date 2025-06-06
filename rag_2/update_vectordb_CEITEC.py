@@ -36,7 +36,7 @@ from datetime import datetime
 # Imports do LangChain
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import Chroma
-from langchain_community.document_loaders import TextLoader
+from langchain_community.document_loaders import TextLoader, CSVLoader
 from langchain_core.documents import Document
 
 # Imports do processador semântico (agora o path está correto)
@@ -55,11 +55,13 @@ CHROMA_DB_DIR_CEITEC = "./chroma_db_semantic_CEITEC"
 PROCESSED_FILES_RECORD = "./processed_files.json"
 EMBEDDING_MODEL = "intfloat/multilingual-e5-large"
 
-# Definir os caminhos para busca de documentos (igual ao rag_api.py)
+# Definir os caminhos para busca de documentos
 base_paths_CEITEC = [
-    '/mnt/data02/MGI/projetoscid/060 Sites Institucionais CEITEC',
-    '/mnt/data02/MGI/projetoscid/070 Artigos Científicos CEITEC',
-    '/mnt/data02/MGI/projetoscid/071 Artigos Científicos IMBEL',
+    '/mnt/data02/MGI/projetoscid/051 Vídeos',
+    '/mnt/data02/MGI/projetoscid/051 Vídeos CEITEC',
+    '/mnt/data02/MGI/projetoscid/060 Sites Institucionais',
+    '/mnt/data02/MGI/projetoscid/061 Sites Institucionais CEITEC',
+    '/mnt/data02/MGI/projetoscid/071 Artigos Científicos CEITEC',
     '/mnt/data02/MGI/projetoscid/090 Prompts e Scripts',
     '/mnt/data02/MGI/projetoscid/091 Notícias Ceitec'
 ]
@@ -160,9 +162,10 @@ def save_processed_files(processed_files: Dict[str, str]) -> None:
     with open(PROCESSED_FILES_RECORD, 'w', encoding='utf-8') as f:
         json.dump(processed_files, f, ensure_ascii=False, indent=2)
 
-def find_markdown_files() -> List[str]:
-    """Encontra todos os arquivos Markdown nas pastas definidas."""
+def find_supported_files() -> List[str]:
+    """Encontra todos os arquivos suportados (.md, .txt, .csv) nas pastas definidas."""
     all_files = []
+    supported_extensions = ['.md', '.txt', '.csv']
     
     for base_path in base_paths_CEITEC:
         if not os.path.exists(base_path) or not os.path.isdir(base_path):
@@ -171,7 +174,8 @@ def find_markdown_files() -> List[str]:
             
         for root, _, files in os.walk(base_path):
             for file in files:
-                if file.lower().endswith('.md'):
+                file_lower = file.lower()
+                if any(file_lower.endswith(ext) for ext in supported_extensions):
                     file_path = os.path.join(root, file)
                     all_files.append(file_path)
                     
@@ -200,9 +204,26 @@ def process_files(files_to_process: List[str], chunker: E5SemanticChunker) -> Li
         print(f"Processando arquivo {i+1}/{len(files_to_process)}: {file_path}")
         
         try:
-            # Carregar o conteúdo do arquivo
-            loader = TextLoader(file_path, encoding='utf-8')
-            doc = loader.load()[0]  # Assume um documento por arquivo
+            # Determinar o tipo de arquivo e usar o loader apropriado
+            file_extension = os.path.splitext(file_path)[1].lower()
+            
+            if file_extension in ['.md', '.txt']:
+                # Usar TextLoader para arquivos de texto e markdown
+                loader = TextLoader(file_path, encoding='utf-8')
+                doc = loader.load()[0]
+            elif file_extension == '.csv':
+                # Usar CSVLoader para arquivos CSV
+                loader = CSVLoader(file_path, encoding='utf-8')
+                csv_docs = loader.load()
+                # Para CSV, concatenar todos os documentos em um só
+                combined_content = "\n\n".join([doc.page_content for doc in csv_docs])
+                doc = Document(
+                    page_content=combined_content,
+                    metadata={'source': file_path, 'file_type': 'csv'}
+                )
+            else:
+                print(f"  → Tipo de arquivo não suportado: {file_extension}")
+                continue
             
             # Chunk o conteúdo do documento
             doc_chunks = chunker.chunk_text(doc.page_content)
@@ -217,12 +238,13 @@ def process_files(files_to_process: List[str], chunker: E5SemanticChunker) -> Li
                         'doc_id': i,
                         'chunk_idx': j,
                         'total_chunks': len(doc_chunks),
+                        'file_type': file_extension[1:],  # Remove o ponto da extensão
                         'processed_date': datetime.now().isoformat()
                     }
                 )
                 processed_chunks.append(chunk_doc)
                 
-            print(f"  → Criados {len(doc_chunks)} chunks para este arquivo")
+            print(f"  → Criados {len(doc_chunks)} chunks para este arquivo ({file_extension})")
             
         except Exception as e:
             print(f"  → ERRO ao processar {file_path}: {e}")
@@ -244,9 +266,9 @@ def main():
     processed_files = load_processed_files()
     print(f"Registro de arquivos processados carregado: {len(processed_files)} arquivos")
     
-    # Encontrar todos os arquivos Markdown
-    all_files = find_markdown_files()
-    print(f"Total de arquivos Markdown encontrados: {len(all_files)}")
+    # Encontrar todos os arquivos suportados
+    all_files = find_supported_files()
+    print(f"Total de arquivos suportados encontrados: {len(all_files)}")
     
     # Identificar arquivos novos ou modificados
     files_to_process, updated_record = identify_new_or_modified_files(all_files, processed_files)

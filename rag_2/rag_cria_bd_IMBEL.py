@@ -13,7 +13,7 @@ from langchain_community.vectorstores import Chroma
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_deepseek import ChatDeepSeek
 from langchain.chains import RetrievalQA
-from langchain_community.document_loaders import TextLoader, DirectoryLoader
+from langchain_community.document_loaders import TextLoader, DirectoryLoader, CSVLoader
 from langchain.prompts import PromptTemplate
 from langchain_core.documents import Document
 
@@ -44,8 +44,11 @@ data_path = os.path.join(base_path, 'data')
 
 # Caminhos padrão para documentos
 DEFAULT_BASE_PATHS_IMBEL = [
-    '/mnt/data02/MGI/projetoscid/061 Sites Institucionais IMBEL',
-    '/mnt/data02/MGI/projetoscid/071 Artigos Científicos IMBEL',
+    '/mnt/data02/MGI/projetoscid/051 Vídeos',
+    '/mnt/data02/MGI/projetoscid/051 Vídeos IMBEL',
+    '/mnt/data02/MGI/projetoscid/060 Sites Institucionais',
+    '/mnt/data02/MGI/projetoscid/062 Sites Institucionais IMBEL',
+    '/mnt/data02/MGI/projetoscid/072 Artigos Científicos IMBEL',
     '/mnt/data02/MGI/projetoscid/090 Prompts e Scripts',
     '/mnt/data02/MGI/projetoscid/092 Notícias Imbel'
 ]
@@ -101,15 +104,45 @@ def create_vectorstore(base_paths: List[str] = None, chroma_db_dir: str = CHROMA
         for base_path in base_paths:
             if os.path.exists(base_path) and os.path.isdir(base_path):
                 print(f"Carregando documentos de: {base_path}")
-                loader = DirectoryLoader(base_path, glob="**/*.md",
-                                 loader_cls=lambda file_path: TextLoader(file_path, encoding='utf-8'), 
-                                 show_progress=True)
-                docs_pasta = loader.load()
-                documentos.extend(docs_pasta)
-                print(f"  - Carregados {len(docs_pasta)} documentos desta pasta")
+                
+                # Carregar arquivos Markdown (.md)
+                loader_md = DirectoryLoader(
+                    base_path, 
+                    glob="**/*.md",
+                    loader_cls=lambda file_path: TextLoader(file_path, encoding='utf-8'), 
+                    show_progress=True
+                )
+                docs_md = loader_md.load()
+                documentos.extend(docs_md)
+                print(f"  - Carregados {len(docs_md)} arquivos .md")
+                
+                # Carregar arquivos de texto (.txt)
+                loader_txt = DirectoryLoader(
+                    base_path, 
+                    glob="**/*.txt",
+                    loader_cls=lambda file_path: TextLoader(file_path, encoding='utf-8'), 
+                    show_progress=True
+                )
+                docs_txt = loader_txt.load()
+                documentos.extend(docs_txt)
+                print(f"  - Carregados {len(docs_txt)} arquivos .txt")
+                
+                # Carregar arquivos CSV (.csv)
+                loader_csv = DirectoryLoader(
+                    base_path, 
+                    glob="**/*.csv",
+                    loader_cls=lambda file_path: CSVLoader(file_path, encoding='utf-8'), 
+                    show_progress=True
+                )
+                docs_csv = loader_csv.load()
+                documentos.extend(docs_csv)
+                print(f"  - Carregados {len(docs_csv)} arquivos .csv")
+                
+                total_docs_pasta = len(docs_md) + len(docs_txt) + len(docs_csv)
+                print(f"  - Total de documentos desta pasta: {total_docs_pasta}")
                 
                 # Calcular hash de cada arquivo carregado e adicionar ao novo registro
-                for doc in docs_pasta:
+                for doc in documentos[-total_docs_pasta:]:  # Apenas os documentos recém-adicionados
                     file_path = doc.metadata.get('source')
                     if file_path:
                         novo_registro[file_path] = calculate_file_hash(file_path)

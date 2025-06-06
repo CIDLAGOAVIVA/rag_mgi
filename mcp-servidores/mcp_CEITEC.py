@@ -2,9 +2,9 @@ import os
 import sys
 import time
 import asyncio
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List, Callable
 from dotenv import load_dotenv
-from types import SimpleNamespace # Importar SimpleNamespace
+from types import SimpleNamespace
 
 # Adicionar o diretório raiz do projeto ao sys.path ANTES da importação local
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -12,7 +12,7 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 # Importar do módulo RAG específico do CEITEC
-from rag_2.rag_cria_bd_CEITEC import ( # ATENÇÃO: Verifique se o nome do módulo está correto
+from rag_2.rag_cria_bd_CEITEC import (
     create_vectorstore,
     load_processed_files,
     save_processed_files,
@@ -26,20 +26,27 @@ from langchain_deepseek import ChatDeepSeek
 from langchain.chains import RetrievalQA
 from contextlib import asynccontextmanager
 
+# Importações para reranking
+from langchain.retrievers import ContextualCompressionRetriever
+from langchain.retrievers.document_compressors.base import BaseDocumentCompressor
+from langchain_core.retrievers import BaseRetriever
+from langchain_core.documents import Document
+
 # Importar FastMCP v2
 from fastmcp import FastMCP, Context
 
 # Definir as constantes de configuração
 CHROMA_DB_DIR_CEITEC = "./chroma_db_semantic_CEITEC"
-EMBEDDING_MODEL = "intfloat/multilingual-e5-large" # Modelo de embedding
+EMBEDDING_MODEL = "intfloat/multilingual-e5-large"
+INITIAL_RETRIEVAL_K = 30  # Recuperação inicial mais ampla
+
+# Verificar se a chave de API Cohere está definida
+# COHERE_API_KEY = os.getenv("COHERE_API_KEY")
+USE_CROSS_ENCODER = True  # Determina se deve usar CrossEncoder local se a API Cohere não estiver disponível
 
 async def initialize_vectorstore():
     try:
-        # Carregar o registro de arquivos já processados
-        # ATENÇÃO: Esta função load_processed_files é genérica ou específica do CEITEC?
-        # Se for específica, pode ser necessário ajustar o nome ou o módulo de onde é importada.
-        # O mesmo vale para save_processed_files.
-        processed_files_record = load_processed_files() # Assume que esta função é apropriada para CEITEC
+        processed_files_record = load_processed_files()
 
         if os.path.exists(CHROMA_DB_DIR_CEITEC) and os.path.isdir(CHROMA_DB_DIR_CEITEC):
             print(f"Carregando base de dados vetorial existente de {CHROMA_DB_DIR_CEITEC}...")
@@ -54,17 +61,16 @@ async def initialize_vectorstore():
                     if os.path.exists(base_path) and os.path.isdir(base_path):
                         print(f"Escaneando documentos em: {base_path}")
                         for root, _, files_in_dir in os.walk(base_path):
-                            for file_item in files_in_dir: # Renomeado para evitar conflito
+                            for file_item in files_in_dir:
                                 if file_item.endswith('.md'):
                                     file_path = os.path.join(root, file_item)
                                     novo_registro[file_path] = calculate_file_hash(file_path)
                 print(f"Salvando registro de {len(novo_registro)} arquivos existentes...")
-                save_processed_files(novo_registro) # Assume que esta função é apropriada
+                save_processed_files(novo_registro)
                 processed_files_record = novo_registro
             print(f"Base de dados vetorial existente carregada. Registro contém {len(processed_files_record)} arquivos.")
         else:
             print(f"Base de dados vetorial não encontrada em {CHROMA_DB_DIR_CEITEC}. Criando nova base...")
-            # A função create_vectorstore também deve ser específica para CEITEC se necessário
             vectorstore = create_vectorstore(base_paths=DEFAULT_BASE_PATHS_CEITEC, chroma_db_dir=CHROMA_DB_DIR_CEITEC)
             print("Base de dados vetorial criada com sucesso.")
         return vectorstore
@@ -73,10 +79,54 @@ async def initialize_vectorstore():
         raise
 
 def initialize_rag_chain(vectorstore):
-    retriever = vectorstore.as_retriever(
+    # Configurar o retrievador base
+    base_retriever = vectorstore.as_retriever(
         search_type="mmr",
-        search_kwargs={"k": 15, "fetch_k": 50, "lambda_mult": 0.7}
+        search_kwargs={"k": INITIAL_RETRIEVAL_K, "fetch_k": 50, "lambda_mult": 0.7}
     )
+    
+    # Inicializar o componente de reranking
+    if USE_CROSS_ENCODER:
+        try:
+            from sentence_transformers import CrossEncoder
+            
+            print("Utilizando CrossEncoder local para reranking...")
+            cross_encoder = CrossEncoder("cross-encoder/ms-marco-MiniLM-L6-v2")
+            
+            def cross_encoder_rerank(query: str, docs: List[Document], top_n: int = 15) -> List[Document]:
+                if not docs:
+                    return []
+                doc_pairs = [(query, doc.page_content) for doc in docs]
+                scores = cross_encoder.predict(doc_pairs)
+                doc_score_pairs = sorted(zip(docs, scores), key=lambda x: x[1], reverse=True)
+                return [doc for doc, _ in doc_score_pairs[:top_n]]
+            
+            # Definir a classe wrapper de retriever aqui
+            class CustomRerankingRetriever(BaseRetriever):
+                underlying_retriever: BaseRetriever
+                custom_rerank_function: Callable[[str, List[Document]], List[Document]]
+
+                async def _aget_relevant_documents(self, query: str, **kwargs: Any) -> List[Document]:
+                    docs = await self.underlying_retriever.aget_relevant_documents(query, **kwargs)
+                    return self.custom_rerank_function(query, docs)
+                
+                def _get_relevant_documents(self, query: str, **kwargs: Any) -> List[Document]:
+                    docs = self.underlying_retriever.get_relevant_documents(query, **kwargs)
+                    return self.custom_rerank_function(query, docs)
+
+            retriever = CustomRerankingRetriever(
+                underlying_retriever=base_retriever,
+                custom_rerank_function=lambda q, d: cross_encoder_rerank(q, d, top_n=15)
+            )
+            print("Retriever com reranking customizado (CrossEncoder) inicializado.")
+        except ImportError:
+            print("Aviso: Não foi possível inicializar CrossEncoder, utilizando retrievador base...")
+            retriever = base_retriever
+    else:
+        print("Aviso: CrossEncoder desativado. Utilizando retrievador base...")
+        retriever = base_retriever
+    
+    # Template de prompt
     template = """
     Você é um assistente IA especializado em análise de documentos da empresa CEITEC. Sua função é fornecer informações precisas e contextualizadas com base nos documentos fornecidos.
 
@@ -130,9 +180,9 @@ async def app_lifespan(app: FastMCP):
         print(f"Lifespan: Recursos para {app.name} limpos.")
 
 mcp = FastMCP(
-    name="Base de Conhecimento CEITEC", # Traduzido
+    name="Base de Conhecimento CEITEC",
     lifespan=app_lifespan,
-    instructions="Servidor de conhecimento sobre a empresa CEITEC e seus produtos de semicondutores.", # Já em PT
+    instructions="Servidor de conhecimento sobre a empresa CEITEC e seus produtos de semicondutores.",
     cors_origins=["*"]
 )
 
@@ -167,7 +217,7 @@ async def query_ceitec(query: str, max_results: int = 15, ctx: Context = None) -
     return result
 
 @mcp.tool()
-async def list_document_categories(ctx: Context = None) -> dict: # Nome da tool pode ser mais específico se necessário, e.g. list_ceitec_document_categories
+async def list_document_categories(ctx: Context = None) -> dict:
     """Lista as categorias de documentos disponíveis sobre a CEITEC."""
     if ctx: await ctx.info("Listando categorias de documentos da CEITEC")
     categories = [
@@ -183,21 +233,20 @@ def ceitec_overview() -> dict:
     return {
         "name": "CEITEC S.A.",
         "full_name": "Centro Nacional de Tecnologia Eletrônica Avançada S.A.",
-        "founded": "2008", # Fundada em
-        "headquarters": "Porto Alegre, RS, Brasil", # Sede
-        "industry": "Semicondutores", # Indústria
-        "main_products": ["Chips RFID", "Circuitos integrados para aplicações específicas"], # Principais produtos
+        "founded": "2008",
+        "headquarters": "Porto Alegre, RS, Brasil",
+        "industry": "Semicondutores",
+        "main_products": ["Chips RFID", "Circuitos integrados para aplicações específicas"],
         "description": "A CEITEC S.A. é uma empresa pública federal brasileira, vinculada ao Ministério da Ciência, Tecnologia e Inovações, focada no desenvolvimento e produção de componentes semicondutores."
     }
 
 @mcp.resource("ceitec://document-count")
-def document_count() -> dict: # Nome do resource pode ser mais específico, e.g. ceitec_document_count
+def document_count() -> dict:
     """Informações sobre a quantidade de documentos na base de conhecimento da CEITEC."""
-    # Esta função load_processed_files deve ser a específica do CEITEC
     return {
-        "total_documents": len(load_processed_files()), # Total de documentos
-        "total_chunks": "Variável conforme processamento", # Total de pedaços (chunks)
-        "last_updated": time.strftime("%Y-%m-%d %H:%M:%S"), # Última atualização
+        "total_documents": len(load_processed_files()),
+        "total_chunks": "Variável conforme processamento",
+        "last_updated": time.strftime("%Y-%m-%d %H:%M:%S"),
     }
 
 # Definir prompts MCP
@@ -246,7 +295,7 @@ def project_detailed_response(company_name: str, project_name: str, description:
     """
 
 @mcp.prompt()
-def technical_response(summary: str, details: str, specs: str, sources: str) -> str: # Nome do prompt pode ser ceitec_technical_response
+def technical_response(summary: str, details: str, specs: str, sources: str) -> str:
     """Formato para respostas técnicas sobre semicondutores e chips da CEITEC."""
     return f"""
     # Resposta Técnica sobre CEITEC
@@ -261,7 +310,7 @@ def technical_response(summary: str, details: str, specs: str, sources: str) -> 
     """
 
 @mcp.prompt()
-def general_response(main_content: str, additional_info: str, sources: str) -> str: # Nome do prompt pode ser ceitec_general_response
+def general_response(main_content: str, additional_info: str, sources: str) -> str:
     """Formato para respostas gerais sobre a CEITEC."""
     return f"""
     # Informações sobre CEITEC
@@ -284,7 +333,7 @@ async def health_check(request):
     return JSONResponse(healthy_status)
 
 if __name__ == "__main__":
-    port = int(os.getenv("PORT", 8009)) # Porta padrão para CEITEC
+    port = int(os.getenv("PORT", 8009))
     load_dotenv()
     print(f"Iniciando servidor MCP para CEITEC na porta {port}...")
     mcp.run(
