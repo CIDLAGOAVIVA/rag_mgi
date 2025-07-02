@@ -54,9 +54,9 @@ elif LLM_CALL == "API" and not DEEPSEEK_API_KEY:
 
 # Configurações dos servidores MCP
 MCP_SERVERS = {
-    "TELEBRAS": {"url": "http://localhost:8011/mcp/", "description": "Conhecimento TELEBRAS."},
-    "CEITEC": {"url": "http://localhost:8009/mcp/", "description": "Conhecimento CEITEC."},
-    "IMBEL": {"url": "http://localhost:8010/mcp/", "description": "Conhecimento IMBEL."}
+    "TELEBRAS": {"url": "http://localhost:{PORT_TELEBRAS}/mcp/", "description": "Conhecimento TELEBRAS."},
+    "CEITEC": {"url": "http://localhost:{PORT_CEITEC}/mcp/", "description": "Conhecimento CEITEC."},
+    "IMBEL": {"url": "http://localhost:{PORT_IMBEL}/mcp/", "description": "Conhecimento IMBEL."}
 }
 
 # Inicializar o CrossEncoder para reranking local

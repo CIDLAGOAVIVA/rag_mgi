@@ -407,7 +407,7 @@ async def health_check(request):
     return JSONResponse(healthy_status)
 
 if __name__ == "__main__":
-    port = int(os.getenv("PORT", 8010))
+    port = int(os.getenv("PORT", PORT_IMBEL))
     load_dotenv()
     print(f"Iniciando servidor MCP para IMBEL na porta {port}...")
     mcp.run(

@@ -346,7 +346,7 @@ async def health_check(request):
     return JSONResponse(healthy_status)
 
 if __name__ == "__main__":
-    port = int(os.getenv("PORT", 8009))
+    port = int(os.getenv("PORT", PORT_CEITEC))
     load_dotenv()
     print(f"Iniciando servidor MCP para CEITEC na porta {port}...")
     mcp.run(

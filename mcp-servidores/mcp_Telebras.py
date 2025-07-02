@@ -465,7 +465,7 @@ async def health_check(request):
     return JSONResponse(healthy_status)
 
 if __name__ == "__main__":
-    port = int(os.getenv("PORT", 8011))
+    port = int(os.getenv("PORT", PORT_TELEBRAS))
     load_dotenv()
     print(f"Iniciando servidor MCP para TELEBRAS na porta {port}...")
     mcp.run(
